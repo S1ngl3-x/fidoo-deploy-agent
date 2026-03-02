@@ -57,7 +57,6 @@ describe("assembleSite", () => {
     assert.deepEqual(config.routes, [
       { route: "/.auth/*", allowedRoles: ["anonymous"] },
       { route: "/login",   allowedRoles: ["anonymous"] },
-      { route: "/login/",  allowedRoles: ["anonymous"] },
       { route: "/login/*", allowedRoles: ["anonymous"] },
       { route: "/*",       allowedRoles: ["authenticated"] },
     ]);

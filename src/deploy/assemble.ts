@@ -36,7 +36,6 @@ export async function assembleSite(
     routes: [
       { route: "/.auth/*", allowedRoles: ["anonymous"] },
       { route: "/login",   allowedRoles: ["anonymous"] },
-      { route: "/login/",  allowedRoles: ["anonymous"] },
       { route: "/login/*", allowedRoles: ["anonymous"] },
       { route: "/*",       allowedRoles: ["authenticated"] },
     ],
