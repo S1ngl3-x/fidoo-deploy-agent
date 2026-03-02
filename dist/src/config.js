@@ -1,6 +1,6 @@
 export function buildConfig() {
     return {
-        tenantId: process.env.DEPLOY_AGENT_TENANT_ID ?? "7d8c4da5-9bcc-48dd-ace3-fb4681cf4277",
+        tenantId: process.env.DEPLOY_AGENT_TENANT_ID ?? "7bcac0ca-0725-4318-9adc-e9b670a48e92",
         clientId: process.env.DEPLOY_AGENT_CLIENT_ID ?? "PLACEHOLDER_CLIENT_ID",
         subscriptionId: process.env.DEPLOY_AGENT_SUBSCRIPTION_ID ?? "PLACEHOLDER_SUBSCRIPTION_ID",
         resourceGroup: process.env.DEPLOY_AGENT_RESOURCE_GROUP ?? "rg-published-apps",
@@ -15,8 +15,8 @@ export function buildConfig() {
         swaApiVersion: "2022-09-01",
         storageApiVersion: "2024-11-04",
         location: process.env.DEPLOY_AGENT_LOCATION ?? "westeurope",
-        swaSkuName: "Free",
-        swaSkuTier: "Free",
+        swaSkuName: "Standard",
+        swaSkuTier: "Standard",
     };
 }
 export const config = buildConfig();
