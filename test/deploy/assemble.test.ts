@@ -56,28 +56,11 @@ describe("assembleSite", () => {
     const config = JSON.parse(await readFile(join(outDir, "staticwebapp.config.json"), "utf-8"));
     assert.deepEqual(config.routes, [
       { route: "/.auth/*", allowedRoles: ["anonymous"] },
-      { route: "/login",   allowedRoles: ["anonymous"] },
-      { route: "/login/*", allowedRoles: ["anonymous"] },
       { route: "/*",       allowedRoles: ["authenticated"] },
     ]);
     assert.deepEqual(config.responseOverrides, {
-      "401": { redirect: "/login/", statusCode: 302 },
+      "401": { redirect: "/.auth/login/aad?post_login_redirect_uri=.referrer", statusCode: 302 },
     });
-  });
-
-  test("creates login/index.html with redirect logic", async () => {
-    mockFetch((url) => {
-      if (url.includes("comp=list")) {
-        return { status: 200, body: "<EnumerationResults><Blobs></Blobs></EnumerationResults>", headers: { "content-type": "application/xml" } };
-      }
-      return undefined;
-    });
-    const registry: Registry = { apps: [] };
-    await assembleSite("tok", registry, outDir);
-    const html = await readFile(join(outDir, "login", "index.html"), "utf-8");
-    assert.ok(html.includes("<!DOCTYPE html>"));
-    assert.ok(html.includes("document.referrer"));
-    assert.ok(html.includes("post_login_redirect_uri"));
   });
 
   test("downloads app files into slug subdirectory", async () => {

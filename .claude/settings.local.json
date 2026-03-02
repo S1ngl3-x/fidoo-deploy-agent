@@ -8,7 +8,8 @@
       "Bash(npm:*)",
       "Bash(node:*)",
       "Bash(gh auth:*)",
-      "Bash(gh repo:*)"
+      "Bash(gh repo:*)",
+      "mcp__plugin_deploy-agent_deploy-agent__auth_status"
     ],
     "additionalDirectories": [
       "/Users/peterhora/Documents/fidoo/deploy_agent/docs"
