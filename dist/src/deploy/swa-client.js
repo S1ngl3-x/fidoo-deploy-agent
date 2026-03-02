@@ -17,7 +17,7 @@ function execAsync(file, args, options) {
         });
     });
 }
-const STABLE_URL = "https://swalocaldeployv2-bndtgugjgqc3dhdx.b01.azurefd.net/api/versions/stable";
+const STABLE_URL = "https://aka.ms/swalocaldeploy";
 const CACHE_DIR = join(homedir(), ".swa", "deploy");
 function platformKey() {
     switch (process.platform) {
@@ -58,7 +58,10 @@ async function downloadBinary() {
     const resp = await fetch(STABLE_URL);
     if (!resp.ok)
         throw new Error(`Failed to fetch SWA client metadata: ${resp.status}`);
-    const meta = (await resp.json());
+    const versions = (await resp.json());
+    const meta = versions.find((v) => v.version === "stable");
+    if (!meta)
+        throw new Error("No stable SWA client version found in metadata");
     const platform = platformKey();
     const info = meta.files[platform];
     if (!info)
