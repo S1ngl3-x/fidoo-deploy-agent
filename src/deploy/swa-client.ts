@@ -17,7 +17,10 @@ function execAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     childProcess.execFile(file, [...args], options, (error, stdout, stderr) => {
-      if (error) return reject(error);
+      if (error) {
+        error.message += `\nstdout: ${stdout}\nstderr: ${stderr}`;
+        return reject(error);
+      }
       resolve({ stdout: stdout ?? "", stderr: stderr ?? "" });
     });
   });
