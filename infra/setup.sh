@@ -28,6 +28,10 @@ SWA_NAME="swa-${SWA_SLUG}"
 STORAGE_ACCOUNT="stpublishedapps"          # Must be globally unique, 3-24 lowercase alphanumeric
 CONTAINER_NAME="app-content"               # Blob container for app files + registry
 APP_DOMAIN="ai-apps.env.fidoo.cloud"       # Custom domain (DNS configured manually)
+ACR_NAME="fidooapps"
+CONTAINER_ENV_NAME="fidoo-vibe-env"
+PULL_IDENTITY_NAME="fidoo-vibe-container-puller"
+CONTAINER_DOMAIN="api.env.fidoo.cloud"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -234,6 +238,44 @@ else
     --output none
   ok "Blob container '$CONTAINER_NAME' created"
 fi
+
+# ── 3b. Azure Container Registry ─────────────────────────────────────────────
+
+info "Checking Azure Container Registry '$ACR_NAME'..."
+
+if az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+  ok "ACR '$ACR_NAME' already exists"
+else
+  info "Creating ACR '$ACR_NAME' (Basic SKU)..."
+  az acr create \
+    --name "$ACR_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --sku Basic \
+    --location "$LOCATION" \
+    --output none
+  ok "ACR '$ACR_NAME' created"
+fi
+
+ACR_ID=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
+ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+
+# ── 3c. Container Apps Environment ───────────────────────────────────────────
+
+info "Checking Container Apps Environment '$CONTAINER_ENV_NAME'..."
+
+if az containerapp env show --name "$CONTAINER_ENV_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+  ok "Container Apps Environment '$CONTAINER_ENV_NAME' already exists"
+else
+  info "Creating Container Apps Environment '$CONTAINER_ENV_NAME'..."
+  az containerapp env create \
+    --name "$CONTAINER_ENV_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --output none
+  ok "Container Apps Environment '$CONTAINER_ENV_NAME' created"
+fi
+
+CONTAINER_ENV_ID=$(az containerapp env show --name "$CONTAINER_ENV_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
 
 # ── 4. Single Static Web App ─────────────────────────────────────────────────
 
