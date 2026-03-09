@@ -22,44 +22,20 @@ export async function listBuildSourceUploadUrl(token) {
     const data = (await res.json());
     return data;
 }
-const FILES_API_VERSION = "2024-11-04";
-const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — Azure Files max range write
-// Upload a buffer to a pre-authenticated Azure Files SAS URL.
-// Two-step: create empty file, then write content in 4 MB chunks.
-export async function uploadToAzureFiles(uploadUrl, content) {
-    // The uploadUrl already contains SAS params (?sv=...&sig=...).
-    // For additional query params we append with "&".
-    const separator = uploadUrl.includes("?") ? "&" : "?";
-    // Step 1: Create the empty file
-    const createRes = await fetch(uploadUrl, {
+// Upload a buffer to the pre-authenticated blob SAS URL from listBuildSourceUploadUrl.
+// Single PUT with BlockBlob type — the URL is Azure Blob Storage, not Azure Files.
+export async function uploadSourceBlob(uploadUrl, content) {
+    const res = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
-            "x-ms-type": "file",
-            "x-ms-content-length": String(content.length),
-            "x-ms-version": FILES_API_VERSION,
-            "Content-Length": "0",
+            "x-ms-blob-type": "BlockBlob",
+            "Content-Type": "application/octet-stream",
+            "Content-Length": String(content.length),
         },
+        body: new Uint8Array(content),
     });
-    if (!createRes.ok) {
-        throw new Error(`Azure Files create failed: ${createRes.status} ${await createRes.text()}`);
-    }
-    // Step 2: Write content in chunks
-    for (let offset = 0; offset < content.length; offset += CHUNK_SIZE) {
-        const end = Math.min(offset + CHUNK_SIZE, content.length) - 1;
-        const chunk = content.subarray(offset, end + 1);
-        const rangeRes = await fetch(`${uploadUrl}${separator}comp=range`, {
-            method: "PUT",
-            headers: {
-                "x-ms-write": "update",
-                "x-ms-range": `bytes=${offset}-${end}`,
-                "x-ms-version": FILES_API_VERSION,
-                "Content-Length": String(chunk.length),
-            },
-            body: chunk,
-        });
-        if (!rangeRes.ok) {
-            throw new Error(`Azure Files range write failed: ${rangeRes.status} ${await rangeRes.text()}`);
-        }
+    if (!res.ok) {
+        throw new Error(`Source blob upload failed: ${res.status} ${await res.text()}`);
     }
 }
 // Trigger an ACR Tasks build using the ARM REST API.

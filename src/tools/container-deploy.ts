@@ -6,7 +6,7 @@ import { config } from "../config.js";
 import { readDeployConfig, writeDeployConfig, generateSlug } from "../deploy/deploy-json.js";
 import { loadRegistry, saveRegistry, upsertApp } from "../deploy/registry.js";
 import { createBlobContainer } from "../azure/blob.js";
-import { listBuildSourceUploadUrl, uploadToAzureFiles, scheduleAcrBuild, pollAcrBuild } from "../azure/acr.js";
+import { listBuildSourceUploadUrl, uploadSourceBlob, scheduleAcrBuild, pollAcrBuild } from "../azure/acr.js";
 import { createTarball } from "../deploy/tarball.js";
 import { createOrUpdateContainerApp } from "../azure/container-apps.js";
 
@@ -134,7 +134,7 @@ export const handler: ToolHandler = async (args) => {
     const { uploadUrl, relativePath } = await listBuildSourceUploadUrl(armToken);
 
     // 3. Upload tar.gz to Azure Files
-    await uploadToAzureFiles(uploadUrl, tarball);
+    await uploadSourceBlob(uploadUrl, tarball);
 
     // 4. Trigger ACR Tasks build and wait for completion
     const runId = await scheduleAcrBuild(armToken, `${slug}:${timestamp}`, relativePath);
