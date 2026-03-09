@@ -9,9 +9,12 @@ export async function createOrUpdateContainerApp(token, opts) {
     const containerAppPath = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/containerApps/${opts.slug}`;
     const url = `${config.armBaseUrl}${containerAppPath}?api-version=${CA_API}`;
     const envId = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/managedEnvironments/${config.containerEnvName}`;
-    const secrets = opts.persistentStorage
-        ? [{ name: "azure-storage-account-key", value: opts.storageAccountKey }]
-        : [];
+    const secrets = [
+        { name: "acr-admin-password", value: config.acrAdminPassword },
+        ...(opts.persistentStorage
+            ? [{ name: "azure-storage-account-key", value: opts.storageAccountKey }]
+            : []),
+    ];
     const envVars = opts.persistentStorage
         ? [
             { name: "DATA_DIR", value: "/data" },
@@ -22,10 +25,6 @@ export async function createOrUpdateContainerApp(token, opts) {
         : [];
     const body = {
         location: config.location,
-        identity: {
-            type: "UserAssigned",
-            userAssignedIdentities: { [config.pullIdentityId]: {} },
-        },
         properties: {
             environmentId: envId,
             configuration: {
@@ -38,7 +37,8 @@ export async function createOrUpdateContainerApp(token, opts) {
                 registries: [
                     {
                         server: config.acrLoginServer,
-                        identity: config.pullIdentityId,
+                        username: config.acrAdminUsername,
+                        passwordSecretRef: "acr-admin-password",
                     },
                 ],
             },

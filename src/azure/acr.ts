@@ -1,6 +1,21 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { config } from "../config.js";
 
+const execFileAsync = promisify(execFile);
 const ACR_API = "2019-06-01-preview";
+
+// Build and push image using az acr build (no Docker needed, no SAS URL needed).
+// imageTag: "slug:timestamp" — login server prefix is added automatically by ACR.
+export async function acrBuildFromDir(sourceDir: string, imageTag: string): Promise<void> {
+  await execFileAsync("az", [
+    "acr", "build",
+    "--registry", config.acrName,
+    "--image", imageTag,
+    "--platform", "linux/amd64",
+    sourceDir,
+  ], { maxBuffer: 20 * 1024 * 1024 });
+}
 
 function armHeaders(token: string): Record<string, string> {
   return {

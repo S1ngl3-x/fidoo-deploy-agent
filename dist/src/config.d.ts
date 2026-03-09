@@ -12,6 +12,9 @@ export declare function buildConfig(): {
     containerEnvName: string;
     containerDomain: string;
     pullIdentityId: string;
+    storageKey: string;
+    acrAdminUsername: string;
+    acrAdminPassword: string;
     defaultPort: number;
     armScope: string;
     storageScope: string;
@@ -37,6 +40,9 @@ export declare const config: {
     containerEnvName: string;
     containerDomain: string;
     pullIdentityId: string;
+    storageKey: string;
+    acrAdminUsername: string;
+    acrAdminPassword: string;
     defaultPort: number;
     armScope: string;
     storageScope: string;

@@ -1,5 +1,37 @@
 import { createHmac } from "node:crypto";
+import { execFile } from "node:child_process";
+import { writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { promisify } from "node:util";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { config } from "../config.js";
+const execFileAsync = promisify(execFile);
+// ── az CLI blob helpers (Contributor-safe, no RBAC data-plane role needed) ──
+function useKey() {
+    return !!config.storageKey;
+}
+async function azBlob(args) {
+    const { stdout } = await execFileAsync("az", [
+        "storage", "blob", ...args,
+        "--account-name", config.storageAccount,
+        "--account-key", config.storageKey,
+        "--container-name", config.containerName,
+        "--output", "json",
+        "--only-show-errors",
+    ]);
+    return stdout;
+}
+async function azContainer(args, containerName) {
+    const { stdout } = await execFileAsync("az", [
+        "storage", "container", ...args,
+        "--account-name", config.storageAccount,
+        "--account-key", config.storageKey,
+        "--name", containerName,
+        "--output", "json",
+        "--only-show-errors",
+    ]);
+    return stdout;
+}
 function blobUrl(blobPath) {
     return `https://${config.storageAccount}.blob.core.windows.net/${config.containerName}/${blobPath}`;
 }
@@ -10,6 +42,17 @@ function authHeaders(token) {
     };
 }
 export async function uploadBlob(token, blobPath, content) {
+    if (useKey()) {
+        const tmp = join(tmpdir(), `blob-upload-${Date.now()}.bin`);
+        writeFileSync(tmp, content);
+        try {
+            await azBlob(["upload", "--name", blobPath, "--file", tmp, "--overwrite"]);
+        }
+        finally {
+            unlinkSync(tmp);
+        }
+        return;
+    }
     const resp = await fetch(blobUrl(blobPath), {
         method: "PUT",
         headers: {
@@ -20,49 +63,65 @@ export async function uploadBlob(token, blobPath, content) {
         },
         body: new Uint8Array(content),
     });
-    if (!resp.ok) {
+    if (!resp.ok)
         throw new Error(`Blob upload failed: ${resp.status} ${await resp.text()}`);
-    }
 }
 export async function downloadBlob(token, blobPath) {
-    const resp = await fetch(blobUrl(blobPath), {
-        method: "GET",
-        headers: authHeaders(token),
-    });
+    if (useKey()) {
+        const tmp = join(tmpdir(), `blob-download-${Date.now()}.bin`);
+        try {
+            await azBlob(["download", "--name", blobPath, "--file", tmp]);
+            return readFileSync(tmp);
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.includes("BlobNotFound") || msg.includes("does not exist"))
+                return null;
+            throw e;
+        }
+        finally {
+            try {
+                unlinkSync(tmp);
+            }
+            catch { /* ignore */ }
+        }
+    }
+    const resp = await fetch(blobUrl(blobPath), { method: "GET", headers: authHeaders(token) });
     if (resp.status === 404)
         return null;
-    if (!resp.ok) {
+    if (!resp.ok)
         throw new Error(`Blob download failed: ${resp.status} ${await resp.text()}`);
-    }
     return Buffer.from(await resp.arrayBuffer());
 }
 export async function deleteBlob(token, blobPath) {
-    const resp = await fetch(blobUrl(blobPath), {
-        method: "DELETE",
-        headers: authHeaders(token),
-    });
-    if (!resp.ok && resp.status !== 404) {
-        throw new Error(`Blob delete failed: ${resp.status} ${await resp.text()}`);
+    if (useKey()) {
+        await azBlob(["delete", "--name", blobPath]).catch(() => { });
+        return;
     }
+    const resp = await fetch(blobUrl(blobPath), { method: "DELETE", headers: authHeaders(token) });
+    if (!resp.ok && resp.status !== 404)
+        throw new Error(`Blob delete failed: ${resp.status} ${await resp.text()}`);
 }
 export async function listBlobs(token, prefix) {
+    if (useKey()) {
+        const args = ["list", "--query", "[].name"];
+        if (prefix)
+            args.push("--prefix", prefix);
+        const out = await azBlob(args);
+        return JSON.parse(out);
+    }
     let url = `https://${config.storageAccount}.blob.core.windows.net/${config.containerName}?restype=container&comp=list`;
     if (prefix)
         url += `&prefix=${encodeURIComponent(prefix)}`;
-    const resp = await fetch(url, {
-        method: "GET",
-        headers: authHeaders(token),
-    });
-    if (!resp.ok) {
+    const resp = await fetch(url, { method: "GET", headers: authHeaders(token) });
+    if (!resp.ok)
         throw new Error(`Blob list failed: ${resp.status} ${await resp.text()}`);
-    }
     const xml = await resp.text();
     const names = [];
     const regex = /<Name>([^<]+)<\/Name>/g;
     let match;
-    while ((match = regex.exec(xml)) !== null) {
+    while ((match = regex.exec(xml)) !== null)
         names.push(match[1]);
-    }
     return names;
 }
 export async function deleteBlobsByPrefix(token, prefix) {
@@ -100,6 +159,23 @@ async function getUserDelegationKey(token) {
     };
 }
 export async function generateBlobSasUrl(token, blobPath) {
+    if (useKey()) {
+        const expiry = new Date(Date.now() + 3600_000).toISOString().replace(/\.\d{3}Z/, "Z");
+        const { stdout } = await execFileAsync("az", [
+            "storage", "blob", "generate-sas",
+            "--account-name", config.storageAccount,
+            "--account-key", config.storageKey,
+            "--container-name", config.containerName,
+            "--name", blobPath,
+            "--permissions", "r",
+            "--expiry", expiry,
+            "--https-only",
+            "--full-uri",
+            "--output", "tsv",
+            "--only-show-errors",
+        ]);
+        return stdout.trim();
+    }
     const key = await getUserDelegationKey(token);
     const now = new Date();
     const start = now.toISOString().replace(/\.\d{3}Z/, "Z");
@@ -152,24 +228,21 @@ export async function generateBlobSasUrl(token, blobPath) {
     return `${blobUrl(blobPath)}?${params.toString()}`;
 }
 export async function createBlobContainer(token, containerName) {
-    const resp = await fetch(`https://${config.storageAccount}.blob.core.windows.net/${containerName}?restype=container`, {
-        method: "PUT",
-        headers: {
-            ...authHeaders(token),
-        },
-    });
-    // 201 = created, 409 = already exists — both are fine
+    if (useKey()) {
+        await azContainer(["create"], containerName).catch(() => { });
+        return;
+    }
+    const resp = await fetch(`https://${config.storageAccount}.blob.core.windows.net/${containerName}?restype=container`, { method: "PUT", headers: authHeaders(token) });
     if (!resp.ok && resp.status !== 409) {
         throw new Error(`Failed to create blob container '${containerName}': ${resp.status} ${await resp.text()}`);
     }
 }
 export async function deleteBlobContainer(token, containerName) {
-    const resp = await fetch(`https://${config.storageAccount}.blob.core.windows.net/${containerName}?restype=container`, {
-        method: "DELETE",
-        headers: {
-            ...authHeaders(token),
-        },
-    });
+    if (useKey()) {
+        await azContainer(["delete"], containerName).catch(() => { });
+        return;
+    }
+    const resp = await fetch(`https://${config.storageAccount}.blob.core.windows.net/${containerName}?restype=container`, { method: "DELETE", headers: authHeaders(token) });
     if (!resp.ok && resp.status !== 404) {
         throw new Error(`Failed to delete blob container '${containerName}': ${resp.status} ${await resp.text()}`);
     }

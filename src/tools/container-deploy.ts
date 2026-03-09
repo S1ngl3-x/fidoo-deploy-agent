@@ -5,9 +5,8 @@ import { extractDisplayName } from "../auth/jwt.js";
 import { config } from "../config.js";
 import { readDeployConfig, writeDeployConfig, generateSlug } from "../deploy/deploy-json.js";
 import { loadRegistry, saveRegistry, upsertApp } from "../deploy/registry.js";
-import { uploadBlob, generateBlobSasUrl, deleteBlob, createBlobContainer } from "../azure/blob.js";
-import { createTarball } from "../deploy/tarball.js";
-import { scheduleAcrBuild, pollAcrBuild } from "../azure/acr.js";
+import { createBlobContainer } from "../azure/blob.js";
+import { acrBuildFromDir } from "../azure/acr.js";
 import { createOrUpdateContainerApp } from "../azure/container-apps.js";
 
 export const definition: ToolDefinition = {
@@ -127,17 +126,8 @@ export const handler: ToolHandler = async (args) => {
     const persistStorage = deployConfig!.persistentStorage ?? false;
     const port = (args.port as number | undefined) ?? config.defaultPort;
 
-    // 1. Package source as tar.gz and upload to blob
-    const tarball = await createTarball(folder);
-    const tarPath = `container-builds/${slug}/source-${timestamp}.tar.gz`;
-    await uploadBlob(storageToken, tarPath, tarball);
-
-    // 2. Generate SAS URL for ACR Tasks to download the source
-    const sasUrl = await generateBlobSasUrl(storageToken, tarPath);
-
-    // 3. Trigger ACR Tasks build and wait for completion
-    const runId = await scheduleAcrBuild(armToken, `${slug}:${timestamp}`, sasUrl);
-    await pollAcrBuild(armToken, runId, (line) => process.stderr.write(line + "\n"));
+    // 1-3. Build and push image via az acr build (handles upload + build internally)
+    await acrBuildFromDir(folder, `${slug}:${timestamp}`);
 
     // 4. Provision per-app blob container for Litestream (persistent only)
     const storageContainer = `${slug}-data`;
@@ -146,19 +136,7 @@ export const handler: ToolHandler = async (args) => {
     }
 
     // 5. Get storage account key for injecting into Container App secret
-    let storageAccountKey = "";
-    if (persistStorage) {
-      const keyUrl = `https://management.azure.com/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Storage/storageAccounts/${config.storageAccount}/listKeys?api-version=2023-01-01`;
-      const keyRes = await fetch(keyUrl, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${armToken}`, "Content-Type": "application/json" },
-      });
-      if (!keyRes.ok) {
-        throw new Error(`Failed to get storage key: ${keyRes.status} ${await keyRes.text()}`);
-      }
-      const keyData = (await keyRes.json()) as { keys: { value: string }[] };
-      storageAccountKey = keyData.keys[0].value;
-    }
+    const storageAccountKey = persistStorage ? config.storageKey : "";
 
     // 6. Create or update Container App
     const appUrl = await createOrUpdateContainerApp(armToken, {
@@ -193,9 +171,6 @@ export const handler: ToolHandler = async (args) => {
       persistentStorage: persistStorage,
     });
     await saveRegistry(storageToken, registry);
-
-    // 9. Clean up source tarball (fire and forget)
-    deleteBlob(storageToken, tarPath).catch(() => {});
 
     return {
       content: [
