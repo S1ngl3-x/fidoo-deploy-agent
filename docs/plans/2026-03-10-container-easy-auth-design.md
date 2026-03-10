@@ -251,7 +251,7 @@ az ad app permission add --id $GRAPH_SP_APP_ID \
 az ad app permission admin-consent --id $GRAPH_SP_APP_ID
 
 # 3. Add Graph SP as owner of Deploy Portal app registration
-PORTAL_OBJECT_ID=$(az ad app show --id $PORTAL_CLIENT_ID --query id -o tsv)
+PORTAL_OBJECT_ID=$(az ad app show --id $DEPLOY_PORTAL_APP_ID --query id -o tsv)
 az ad app owner add --id $PORTAL_OBJECT_ID --owner-object-id $GRAPH_SP_OBJECT_ID
 
 # 4. Configure Container Apps Environment custom domain (manual: DNS + cert required first)

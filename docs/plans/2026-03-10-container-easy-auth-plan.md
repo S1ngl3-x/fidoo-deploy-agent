@@ -267,28 +267,26 @@ import {
 } from "../helpers/mock-fetch.js";
 import { addRedirectUri, removeRedirectUri } from "../../src/azure/container-apps.js";
 
-const GRAPH_APP_URL = "https://graph.microsoft.com/v1.0/applications/portal-obj-id";
+// config.portalObjectId is a module singleton built at startup — it defaults to ""
+// in tests (no env var set). Mock matchers must use the actual URL shape:
+// https://graph.microsoft.com/v1.0/applications/{portalObjectId}
+// Since portalObjectId is "" in tests, the URL path ends with "/applications/".
+// Match on the stable prefix, not the dynamic object ID value.
+const GRAPH_APPS_PATH = "graph.microsoft.com/v1.0/applications";
 
-function setupEnv() {
-  process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID = "portal-obj-id";
-  process.env.DEPLOY_AGENT_CONTAINER_DOMAIN = "api.env.fidoo.cloud";
-}
-
-function cleanEnv() {
-  delete process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID;
-  delete process.env.DEPLOY_AGENT_CONTAINER_DOMAIN;
-}
+// containerDomain defaults to "api.env.fidoo.cloud" — redirect URIs in assertions
+// use that default. No env var setup needed for containerDomain.
 
 describe("addRedirectUri", () => {
-  beforeEach(() => { installMockFetch(); setupEnv(); });
-  afterEach(() => { restoreFetch(); cleanEnv(); });
+  beforeEach(() => installMockFetch());
+  afterEach(() => restoreFetch());
 
   it("GETs existing URIs then PATCHes with new URI appended", async () => {
     const existing = ["https://existing.example.com/.auth/login/aad/callback"];
     mockFetch((url, init) => {
-      if (url.includes("portal-obj-id") && (!init?.method || init.method === "GET"))
+      if (url.includes(GRAPH_APPS_PATH) && (!init?.method || init.method === "GET"))
         return { status: 200, body: { web: { redirectUris: existing } } };
-      if (url.includes("portal-obj-id") && init?.method === "PATCH")
+      if (url.includes(GRAPH_APPS_PATH) && init?.method === "PATCH")
         return { status: 200, body: {} };
       return undefined;
     });
@@ -310,9 +308,9 @@ describe("addRedirectUri", () => {
   it("does not duplicate an existing redirect URI", async () => {
     const uri = "https://my-app.api.env.fidoo.cloud/.auth/login/aad/callback";
     mockFetch((url, init) => {
-      if (url.includes("portal-obj-id") && (!init?.method || init.method === "GET"))
+      if (url.includes(GRAPH_APPS_PATH) && (!init?.method || init.method === "GET"))
         return { status: 200, body: { web: { redirectUris: [uri] } } };
-      if (url.includes("portal-obj-id") && init?.method === "PATCH")
+      if (url.includes(GRAPH_APPS_PATH) && init?.method === "PATCH")
         return { status: 200, body: {} };
       return undefined;
     });
@@ -328,9 +326,9 @@ describe("addRedirectUri", () => {
 
   it("uses Bearer token in Authorization header", async () => {
     mockFetch((url, init) => {
-      if (url.includes("portal-obj-id") && (!init?.method || init.method === "GET"))
+      if (url.includes(GRAPH_APPS_PATH) && (!init?.method || init.method === "GET"))
         return { status: 200, body: { web: { redirectUris: [] } } };
-      if (url.includes("portal-obj-id") && init?.method === "PATCH")
+      if (url.includes(GRAPH_APPS_PATH) && init?.method === "PATCH")
         return { status: 200, body: {} };
       return undefined;
     });
@@ -346,16 +344,16 @@ describe("addRedirectUri", () => {
 });
 
 describe("removeRedirectUri", () => {
-  beforeEach(() => { installMockFetch(); setupEnv(); });
-  afterEach(() => { restoreFetch(); cleanEnv(); });
+  beforeEach(() => installMockFetch());
+  afterEach(() => restoreFetch());
 
   it("removes the target URI and PATCHes the remaining list", async () => {
     const target = "https://my-app.api.env.fidoo.cloud/.auth/login/aad/callback";
     const other  = "https://other.api.env.fidoo.cloud/.auth/login/aad/callback";
     mockFetch((url, init) => {
-      if (url.includes("portal-obj-id") && (!init?.method || init.method === "GET"))
+      if (url.includes(GRAPH_APPS_PATH) && (!init?.method || init.method === "GET"))
         return { status: 200, body: { web: { redirectUris: [target, other] } } };
-      if (url.includes("portal-obj-id") && init?.method === "PATCH")
+      if (url.includes(GRAPH_APPS_PATH) && init?.method === "PATCH")
         return { status: 200, body: {} };
       return undefined;
     });
@@ -371,9 +369,9 @@ describe("removeRedirectUri", () => {
 
   it("is a no-op when the URI is not in the list", async () => {
     mockFetch((url, init) => {
-      if (url.includes("portal-obj-id") && (!init?.method || init.method === "GET"))
+      if (url.includes(GRAPH_APPS_PATH) && (!init?.method || init.method === "GET"))
         return { status: 200, body: { web: { redirectUris: [] } } };
-      if (url.includes("portal-obj-id") && init?.method === "PATCH")
+      if (url.includes(GRAPH_APPS_PATH) && init?.method === "PATCH")
         return { status: 200, body: {} };
       return undefined;
     });
