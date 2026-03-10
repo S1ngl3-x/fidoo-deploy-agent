@@ -183,6 +183,52 @@ export async function configureEasyAuth(
   // Redirect URI: https://{fqdn}/.auth/login/aad/callback
 }
 
+// ── Graph redirect URI helpers ──────────────────────────────────────────────
+
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+
+function graphHeaders(graphToken: string): Record<string, string> {
+  return { Authorization: `Bearer ${graphToken}`, "Content-Type": "application/json" };
+}
+
+function redirectUri(slug: string): string {
+  return `https://${slug}.${config.containerDomain}/.auth/login/aad/callback`;
+}
+
+async function getRedirectUris(graphToken: string): Promise<string[]> {
+  const url = `${GRAPH_BASE}/applications/${config.portalObjectId}`;
+  const res = await fetch(url, { headers: graphHeaders(graphToken) });
+  if (!res.ok) throw new Error(`Graph GET app failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { web: { redirectUris: string[] } };
+  return data.web?.redirectUris ?? [];
+}
+
+async function patchRedirectUris(graphToken: string, uris: string[]): Promise<void> {
+  const url = `${GRAPH_BASE}/applications/${config.portalObjectId}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: graphHeaders(graphToken),
+    body: JSON.stringify({ web: { redirectUris: uris } }),
+  });
+  if (!res.ok) throw new Error(`Graph PATCH redirectUris failed: ${res.status} ${await res.text()}`);
+}
+
+export async function addRedirectUri(graphToken: string, slug: string): Promise<void> {
+  const uri = redirectUri(slug);
+  const existing = await getRedirectUris(graphToken);
+  if (existing.includes(uri)) return; // idempotent
+  await patchRedirectUris(graphToken, [...existing, uri]);
+}
+
+export async function removeRedirectUri(graphToken: string, slug: string): Promise<void> {
+  const uri = redirectUri(slug);
+  const existing = await getRedirectUris(graphToken);
+  if (!existing.includes(uri)) return; // nothing to remove
+  await patchRedirectUris(graphToken, existing.filter((u) => u !== uri));
+}
+
+// ── Container App lifecycle ────────────────────────────────────────────────
+
 export async function deleteContainerApp(token: string, slug: string): Promise<void> {
   const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/containerApps/${slug}?api-version=${CA_API}`;
   const res = await fetch(url, { method: "DELETE", headers: h(token) });
