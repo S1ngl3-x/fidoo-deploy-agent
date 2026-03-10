@@ -53,6 +53,11 @@ MCP server plugin for Claude Code that deploys static HTML/JS apps to a single A
 | `DEPLOY_AGENT_SWA_SLUG` | Single SWA resource name | `swa-ai-apps` |
 | `DEPLOY_AGENT_LOCATION` | Azure region for SWA | `westeurope` |
 | `DEPLOY_AGENT_TOKEN_DIR` | Override token storage dir | `~/.deploy-agent` |
+| `DEPLOY_AGENT_PORTAL_CLIENT_ID` | Deploy Portal AAD app client ID | (required for Easy Auth) |
+| `DEPLOY_AGENT_PORTAL_CLIENT_SECRET` | Deploy Portal AAD app client secret | (required for Easy Auth) |
+| `DEPLOY_AGENT_PORTAL_OBJECT_ID` | Deploy Portal AAD app object ID (for Graph PATCH) | (required for Easy Auth) |
+| `DEPLOY_AGENT_GRAPH_SP_CLIENT_ID` | Graph SP client ID | (required for Easy Auth) |
+| `DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET` | Graph SP client secret | (required for Easy Auth) |
 
 ## Key Conventions
 

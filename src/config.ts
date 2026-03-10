@@ -18,8 +18,11 @@ export function buildConfig() {
     acrAdminUsername:  process.env.DEPLOY_AGENT_ACR_ADMIN_USERNAME  ?? "",
     acrAdminPassword:  process.env.DEPLOY_AGENT_ACR_ADMIN_PASSWORD  ?? "",
     // Easy Auth (reuses Deploy Portal AD app registration for container apps)
-    portalClientId:     process.env.DEPLOY_AGENT_PORTAL_CLIENT_ID     ?? "",  // TODO: get from security — Deploy Portal app registration client ID
-    portalClientSecret: process.env.DEPLOY_AGENT_PORTAL_CLIENT_SECRET ?? "",  // TODO: get from security — Deploy Portal app registration client secret
+    portalClientId:      process.env.DEPLOY_AGENT_PORTAL_CLIENT_ID      ?? "",
+    portalClientSecret:  process.env.DEPLOY_AGENT_PORTAL_CLIENT_SECRET  ?? "",
+    portalObjectId:      process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID      ?? "",
+    graphSpClientId:     process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_ID     ?? "",
+    graphSpClientSecret: process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET ?? "",
     defaultPort:       Number(process.env.DEPLOY_AGENT_DEFAULT_PORT ?? "8080"),
     armScope: "https://management.azure.com/.default offline_access",
     storageScope: "https://storage.azure.com/.default offline_access",

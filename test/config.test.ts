@@ -168,6 +168,35 @@ describe("config", () => {
     assert.equal(cfg.swaSkuTier, "Free");
   });
 
+  it("portalObjectId defaults to empty string", async () => {
+    delete process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID;
+    const { buildConfig } = await import("../src/config.js");
+    const c = buildConfig();
+    assert.equal(c.portalObjectId, "");
+  });
+
+  it("graphSpClientId defaults to empty string", async () => {
+    delete process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_ID;
+    const { buildConfig } = await import("../src/config.js");
+    const c = buildConfig();
+    assert.equal(c.graphSpClientId, "");
+  });
+
+  it("graphSpClientSecret defaults to empty string", async () => {
+    delete process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET;
+    const { buildConfig } = await import("../src/config.js");
+    const c = buildConfig();
+    assert.equal(c.graphSpClientSecret, "");
+  });
+
+  it("reads portalObjectId from env", async () => {
+    process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID = "obj-123";
+    const { buildConfig } = await import("../src/config.js");
+    const c = buildConfig();
+    assert.equal(c.portalObjectId, "obj-123");
+    delete process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID;
+  });
+
   it("config export equals buildConfig() result", async () => {
     const { config, buildConfig } = await import("../src/config.js");
     const built = buildConfig();
