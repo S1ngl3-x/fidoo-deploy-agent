@@ -277,6 +277,90 @@ The dashboard app (`apps` slug) cannot be deleted.
 2. This regenerates the dashboard at `https://apps.env.fidoo.cloud` from current Azure state
 3. Use this if the dashboard is out of sync
 
+## Troubleshooting Container Apps
+
+All debugging uses `curl` with ARM REST APIs — no `az` CLI dependency. Read the ARM token from the token store:
+
+```bash
+TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.deploy-agent/tokens.json'))['access_token'])")
+SUB="<subscription-id>"
+RG="<resource-group>"
+```
+
+### App not responding — quick health check
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://{app-url}/
+```
+
+### Check Container App config and FQDN
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}?api-version=2024-03-01" \
+  | python3 -m json.tool
+```
+
+### Restart a Container App revision
+
+```bash
+# Get the active revision name
+REVISION=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}/revisions?api-version=2024-03-01" \
+  | python3 -c "import json,sys; revs=json.load(sys.stdin)['value']; print(next(r['name'] for r in revs if r['properties'].get('active')))")
+
+# Restart it (Content-Length: 0 is required)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Length: 0" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}/revisions/$REVISION/restart?api-version=2024-03-01"
+```
+
+### Check ACR image tags
+
+Uses ACR admin credentials (already in MCP config):
+
+```bash
+curl -s -u "{acr-admin-username}:{acr-admin-password}" \
+  "https://{acr-login-server}/v2/{slug}/tags/list" | python3 -m json.tool
+```
+
+### Read ACR build logs
+
+After a failed `container_deploy`, extract the run ID from the error message:
+
+```bash
+# Get the log download URL (Content-Length: 0 is required)
+LOG_URL=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Length: 0" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/{acr-name}/runs/{run-id}/listLogSasUrl?api-version=2019-06-01-preview" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['logLink'])")
+
+# Fetch the actual logs
+curl -s "$LOG_URL"
+```
+
+### Container App runtime logs (Log Analytics)
+
+Find the Log Analytics workspace name (query via ARM proxy — the `api.loganalytics.io` endpoint requires a different token scope):
+
+```bash
+WORKSPACE=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/providers/Microsoft.OperationalInsights/workspaces?api-version=2022-10-01" \
+  | python3 -c "import json,sys; ws=json.load(sys.stdin)['value']; print(ws[0]['name'])")
+```
+
+Then query the logs through the ARM proxy:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WORKSPACE/api/query?api-version=2020-08-01" \
+  -d '{"query": "ContainerAppConsoleLogs_CL | where ContainerAppName_s == \"{slug}\" | top 50 by TimeGenerated | project TimeGenerated, Log_s"}' \
+  | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for row in d['Tables'][0]['Rows']:
+  print(row[0][:19], row[1].strip() if row[1] else '')
+"
+```
+
 ## Important Notes
 
 - All apps are protected by Entra ID — only users with the `app_subscriber` role can access them
