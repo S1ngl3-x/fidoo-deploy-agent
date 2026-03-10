@@ -109,6 +109,80 @@ export async function createOrUpdateContainerApp(
   throw new Error("Container App provisioning timed out after 5 minutes");
 }
 
+// Configure Easy Auth (built-in authentication) on a Container App.
+// Reuses the Deploy Portal AD app registration so all apps share one auth boundary.
+// Skipped silently when portalClientId is not configured.
+export async function configureEasyAuth(
+  token: string,
+  slug: string,
+): Promise<void> {
+  if (!config.portalClientId || !config.portalClientSecret) {
+    return; // Easy Auth not configured — skip silently
+  }
+
+  const containerAppPath = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/containerApps/${slug}`;
+
+  // 1. Inject portal client secret into Container App secrets
+  //    We PATCH the existing app to add the secret without replacing others.
+  const appUrl = `${config.armBaseUrl}${containerAppPath}?api-version=${CA_API}`;
+  const appRes = await fetch(appUrl, { headers: h(token) });
+  if (!appRes.ok) {
+    throw new Error(`Easy Auth: failed to read Container App: ${appRes.status} ${await appRes.text()}`);
+  }
+  const appData = await appRes.json() as {
+    properties: { configuration: { secrets: { name: string; value: string }[] } };
+  };
+  const existingSecrets = appData.properties.configuration.secrets ?? [];
+  if (!existingSecrets.some((s: { name: string }) => s.name === "portal-client-secret")) {
+    existingSecrets.push({ name: "portal-client-secret", value: config.portalClientSecret });
+    await fetch(appUrl, {
+      method: "PATCH",
+      headers: h(token),
+      body: JSON.stringify({
+        properties: { configuration: { secrets: existingSecrets } },
+      }),
+    });
+  }
+
+  // 2. Configure authConfigs/current
+  const authUrl = `${config.armBaseUrl}${containerAppPath}/authConfigs/current?api-version=${CA_API}`;
+  const body = {
+    properties: {
+      platform: { enabled: true },
+      globalValidation: {
+        unauthenticatedClientAction: "RedirectToLoginPage",
+        redirectToProvider: "azureactivedirectory",
+      },
+      identityProviders: {
+        azureActiveDirectory: {
+          registration: {
+            openIdIssuerUrl: `https://login.microsoftonline.com/${config.tenantId}/v2.0`,
+            clientId: config.portalClientId,
+            clientSecretSettingName: "portal-client-secret",
+          },
+          validation: {
+            allowedAudiences: [config.portalClientId],
+          },
+        },
+      },
+    },
+  };
+
+  const res = await fetch(authUrl, {
+    method: "PUT",
+    headers: h(token),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Easy Auth configuration failed: ${res.status} ${await res.text()}`);
+  }
+
+  // TODO: Add redirect URI to Deploy Portal AD app registration via Graph API
+  // Requires Application.ReadWrite.All scope — discuss with security team
+  // Redirect URI: https://{fqdn}/.auth/login/aad/callback
+}
+
 export async function deleteContainerApp(token: string, slug: string): Promise<void> {
   const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/containerApps/${slug}?api-version=${CA_API}`;
   const res = await fetch(url, { method: "DELETE", headers: h(token) });

@@ -8,7 +8,7 @@ import { loadRegistry, saveRegistry, upsertApp } from "../deploy/registry.js";
 import { createBlobContainer } from "../azure/blob.js";
 import { listBuildSourceUploadUrl, uploadSourceBlob, scheduleAcrBuild, pollAcrBuild } from "../azure/acr.js";
 import { createTarball } from "../deploy/tarball.js";
-import { createOrUpdateContainerApp } from "../azure/container-apps.js";
+import { createOrUpdateContainerApp, configureEasyAuth } from "../azure/container-apps.js";
 import { deploySite } from "../deploy/site-deploy.js";
 
 export const definition: ToolDefinition = {
@@ -161,14 +161,18 @@ export const handler: ToolHandler = async (args) => {
       storageContainer,
     });
 
+    // 8. Configure Easy Auth (skipped silently if portal credentials not set)
+    // TODO: get DEPLOY_AGENT_PORTAL_CLIENT_ID and DEPLOY_AGENT_PORTAL_CLIENT_SECRET from security team
+    try { await configureEasyAuth(armToken, slug); } catch { /* portal credentials not configured */ }
+
     const containerAppId = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.App/containerApps/${slug}`;
 
-    // 8. Persist deploy config
+    // 9. Persist deploy config
     deployConfig!.resourceId = containerAppId;
     deployConfig!.containerAppId = containerAppId;
     await writeDeployConfig(folder, deployConfig!);
 
-    // 9. Update registry
+    // 10. Update registry
     let registry = await loadRegistry(storageToken);
     registry = upsertApp(registry, {
       slug,
