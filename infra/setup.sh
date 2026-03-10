@@ -201,6 +201,76 @@ else
   echo "  PORTAL_CLIENT_SECRET=${DEPLOY_PORTAL_CLIENT_SECRET}"
 fi
 
+# ── 2c. App Registration: Graph SP (for Easy Auth redirect URI management) ───
+# Dedicated SP with Application.ReadWrite.OwnedBy — can only modify apps it owns.
+# Used by deploy agent to add/remove redirect URIs on the Deploy Portal app.
+
+GRAPH_SP_APP_NAME="Deploy Agent Graph SP"
+
+info "Checking app registration '$GRAPH_SP_APP_NAME'..."
+GRAPH_SP_APP_ID=$(az ad app list \
+  --display-name "$GRAPH_SP_APP_NAME" \
+  --query "[0].appId" -o tsv 2>/dev/null || true)
+
+if [[ -n "$GRAPH_SP_APP_ID" && "$GRAPH_SP_APP_ID" != "None" ]]; then
+  ok "App registration '$GRAPH_SP_APP_NAME' already exists (appId: $GRAPH_SP_APP_ID)"
+else
+  info "Creating app registration '$GRAPH_SP_APP_NAME'..."
+  GRAPH_SP_APP_ID=$(az ad app create \
+    --display-name "$GRAPH_SP_APP_NAME" \
+    --sign-in-audience "AzureADMyOrg" \
+    --query appId -o tsv)
+  ok "App registration '$GRAPH_SP_APP_NAME' created (appId: $GRAPH_SP_APP_ID)"
+fi
+
+# Create service principal for Graph SP
+info "Checking service principal for '$GRAPH_SP_APP_NAME'..."
+GRAPH_SP_OBJECT_ID=$(az ad sp list \
+  --filter "appId eq '$GRAPH_SP_APP_ID'" \
+  --query "[0].id" -o tsv 2>/dev/null || true)
+if [[ -z "$GRAPH_SP_OBJECT_ID" || "$GRAPH_SP_OBJECT_ID" == "None" ]]; then
+  GRAPH_SP_OBJECT_ID=$(az ad sp create --id "$GRAPH_SP_APP_ID" --query id -o tsv)
+  ok "Service principal created (objectId: $GRAPH_SP_OBJECT_ID)"
+else
+  ok "Service principal already exists (objectId: $GRAPH_SP_OBJECT_ID)"
+fi
+
+# Grant Application.ReadWrite.OwnedBy on Microsoft Graph
+# 18a4783c-866b-4cc7-a460-3d5e5662c884 = Application.ReadWrite.OwnedBy
+info "Adding Application.ReadWrite.OwnedBy permission to Graph SP..."
+az ad app permission add \
+  --id "$GRAPH_SP_APP_ID" \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions 18a4783c-866b-4cc7-a460-3d5e5662c884=Role 2>/dev/null || true
+
+az ad app permission admin-consent --id "$GRAPH_SP_APP_ID" 2>/dev/null || true
+ok "Application.ReadWrite.OwnedBy granted and admin-consented"
+
+# Add Graph SP as owner of Deploy Portal app (so OwnedBy scope works)
+PORTAL_OBJECT_ID=$(az ad app show --id "$DEPLOY_PORTAL_APP_ID" --query id -o tsv)
+info "Adding Graph SP as owner of Deploy Portal app..."
+az ad app owner add --id "$PORTAL_OBJECT_ID" --owner-object-id "$GRAPH_SP_OBJECT_ID" 2>/dev/null || true
+ok "Graph SP is owner of Deploy Portal app"
+
+# Client secret for Graph SP — skip if one already exists
+info "Checking client secret for '$GRAPH_SP_APP_NAME'..."
+GRAPH_SP_SECRET_COUNT=$(az ad app credential list \
+  --id "$GRAPH_SP_APP_ID" \
+  --query "length(@)" -o tsv 2>/dev/null || echo "0")
+
+if [[ "${GRAPH_SP_SECRET_COUNT}" -gt "0" ]]; then
+  warn "Graph SP client secret already exists — skipping creation."
+  GRAPH_SP_CLIENT_SECRET="ROTATE_MANUALLY"
+else
+  GRAPH_SP_CLIENT_SECRET=$(az ad app credential reset \
+    --id "$GRAPH_SP_APP_ID" \
+    --display-name "easy-auth" \
+    --years 2 \
+    --query password -o tsv)
+  ok "Graph SP client secret created (shown once below — store securely)"
+  echo "  GRAPH_SP_CLIENT_SECRET=${GRAPH_SP_CLIENT_SECRET}"
+fi
+
 # ── 3. Storage Account ───────────────────────────────────────────────────────
 
 info "Checking storage account '$STORAGE_ACCOUNT'..."
@@ -276,6 +346,23 @@ else
 fi
 
 CONTAINER_ENV_ID=$(az containerapp env show --name "$CONTAINER_ENV_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
+
+# ── 3d. Container Apps Environment custom domain (manual) ───────────────────
+# Easy Auth requires each container app to have a custom domain like:
+#   https://{slug}.api.env.fidoo.cloud
+# This needs a wildcard DNS record and TLS cert set up once on the Environment.
+
+info "Container Apps Environment custom domain setup:"
+echo "  Manual steps required (one-time):"
+echo "    1. Obtain wildcard TLS cert for *.${CONTAINER_DOMAIN} (PFX format)"
+echo "    2. Add DNS record: *.api CNAME \$(az containerapp env show --name $CONTAINER_ENV_NAME --resource-group $RESOURCE_GROUP --query 'properties.defaultDomain' -o tsv)"
+echo "    3. Then run:"
+echo "       az containerapp env update \\"
+echo "         --name $CONTAINER_ENV_NAME \\"
+echo "         --resource-group $RESOURCE_GROUP \\"
+echo "         --custom-domain-dnssuffix ${CONTAINER_DOMAIN} \\"
+echo "         --custom-domain-certificate-file ./wildcard-api-cert.pfx \\"
+echo "         --custom-domain-certificate-password \"\""
 
 # ── 4. Single Static Web App ─────────────────────────────────────────────────
 
@@ -468,6 +555,9 @@ DEPLOY_AGENT_CONTAINER_ENV_NAME=$CONTAINER_ENV_NAME
 DEPLOY_AGENT_CONTAINER_DOMAIN=$CONTAINER_DOMAIN
 DEPLOY_AGENT_PULL_IDENTITY_ID=$PULL_IDENTITY_ID
 DEPLOY_AGENT_DEFAULT_PORT=8080
+DEPLOY_AGENT_PORTAL_CLIENT_ID=$DEPLOY_PORTAL_APP_ID
+DEPLOY_AGENT_PORTAL_OBJECT_ID=$PORTAL_OBJECT_ID
+DEPLOY_AGENT_GRAPH_SP_CLIENT_ID=$GRAPH_SP_APP_ID
 EOF
 
 ok "Config written to $ENV_FILE"
@@ -490,6 +580,15 @@ echo "    DEPLOY_AGENT_CONTAINER_NAME=$CONTAINER_NAME"
 echo "    DEPLOY_AGENT_APP_DOMAIN=$APP_DOMAIN"
 echo "    DEPLOY_AGENT_SWA_SLUG=$SWA_SLUG"
 echo "    DEPLOY_PORTAL_CLIENT_ID=$DEPLOY_PORTAL_APP_ID"
+echo ""
+echo ""
+echo "  Easy Auth (Graph SP for redirect URI management):"
+echo "    DEPLOY_AGENT_PORTAL_CLIENT_ID=$DEPLOY_PORTAL_APP_ID"
+echo "    DEPLOY_AGENT_PORTAL_OBJECT_ID=$PORTAL_OBJECT_ID"
+echo "    DEPLOY_AGENT_GRAPH_SP_CLIENT_ID=$GRAPH_SP_APP_ID"
+echo "    DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET=$GRAPH_SP_CLIENT_SECRET"
+echo "    DEPLOY_AGENT_PORTAL_CLIENT_SECRET — use the Deploy Portal client secret"
+echo "    Add these to your .mcp.json env block for Easy Auth to work."
 echo ""
 echo "  Portal auth (PORTAL_CLIENT_SECRET stored as SWA app setting — NOT in .env):"
 echo "    Store PORTAL_CLIENT_SECRET in a vault. Rotate via:"
