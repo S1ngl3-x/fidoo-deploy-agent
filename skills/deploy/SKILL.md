@@ -1,18 +1,18 @@
 ---
 name: deploy
 description: >
-  Deploy, manage, and delete static HTML/JS apps on Azure.
+  Deploy, manage, and delete apps on Azure — static HTML/JS apps and fullstack container apps (Node.js, Python, or any runtime with a Dockerfile + optional SQLite persistence).
   Triggers: "deploy my app", "publish my app", "deploy this to Azure",
   "re-deploy", "update my app", "delete my app", "remove my app",
   "list my apps", "show my apps", "app info", "app status",
   "rebuild dashboard", "fix dashboard".
   Handles authentication, first deploys, re-deploys, and app management
-  via 9 MCP tools backed by Azure Static Web Apps.
+  via MCP tools backed by Azure Static Web Apps and Azure Container Apps.
 ---
 
 # Deploy Skill
 
-You are orchestrating deployments of static HTML/JS apps to Azure Static Web Apps.
+You are orchestrating deployments to Azure. Static apps go to Azure Static Web Apps. Fullstack apps (any runtime + optional SQLite) go to Azure Container Apps.
 Apps get custom domains under `*.env.fidoo.cloud` and Entra ID authentication.
 
 ## Step 1: Check Authentication
@@ -60,6 +60,179 @@ Check if the target folder contains a `.deploy.json` file.
 3. The tool handles everything: slug generation, collision check, SWA creation, ZIP upload, DNS, auth config, `.deploy.json`, and dashboard rebuild
 4. Report the URL: `https://{slug}.env.fidoo.cloud`
 
+## App Type Detection
+
+Before calling any deploy tool, analyze the project folder:
+
+### ⛔ Unsupported database check — do this first
+
+If the project uses any database **other than SQLite**, stop immediately and tell the user:
+
+> "This deploy plugin only supports **SQLite** as a database. Your app appears to use **{detected db}**, which is not supported. To deploy with this plugin, you'll need to rewrite the data layer to use SQLite instead. I can help you do that."
+
+**Unsupported database signals:**
+
+| Signal | Database |
+|---|---|
+| `pg`, `postgres`, `pg-promise`, `@prisma/client` with `provider = "postgresql"` | PostgreSQL |
+| `mysql`, `mysql2`, `@prisma/client` with `provider = "mysql"` | MySQL |
+| `mongodb`, `mongoose`, `@prisma/client` with `provider = "mongodb"` | MongoDB |
+| `redis`, `ioredis` | Redis |
+| `@google-cloud/firestore`, `firebase-admin` | Firestore |
+| `mssql`, `tedious` | SQL Server |
+| `cassandra-driver` | Cassandra |
+| `DATABASE_URL` in `.env` starting with `postgres://`, `mysql://`, `mongodb://` | External DB |
+
+Do NOT proceed to deploy. Offer to help rewrite the app to SQLite.
+
+---
+
+**SQLite signals** (any of these counts):
+- `require("node:sqlite")` or `from "node:sqlite"` in any JS/TS file
+- `better-sqlite3`, `sqlite3`, `sqlite`, `typeorm`, `prisma`, or `sequelize` in `package.json`
+- `SQLAlchemy`, `peewee`, `tortoise-orm`, or `databases` in `requirements.txt`
+- Any `.db` or `.sqlite` file at the project root
+
+| Dockerfile? | SQLite signals? | Action |
+|---|---|---|
+| No | No | `index.html` at root → `app_deploy` (static) |
+| No | Yes | → **scaffold deployment files first**, then `container_deploy persistent_storage: true` |
+| No | No, but has `package.json` / `requirements.txt` / backend code | → **scaffold deployment files** (no Litestream), then `container_deploy persistent_storage: false` |
+| Yes | No | → `container_deploy persistent_storage: false` |
+| Yes | Yes | → `container_deploy persistent_storage: true` |
+
+Always confirm with the user before deploying:
+- Static: "I'll deploy this as a **static app**. Correct?"
+- Container: "I'll deploy this as a **container app**. Correct?"
+- Fullstack + storage: "I'll deploy this as a **fullstack container with persistent storage** — SQLite detected. Correct?"
+
+## Scaffold Deployment Files
+
+When there is no Dockerfile, generate it before deploying. Write the files directly into the project folder. Show the user what you generated and confirm before deploying.
+
+### Detect runtime
+
+- Has `package.json` → **Node.js**
+- Has `requirements.txt` → **Python**
+- Has `.py` files but no `requirements.txt` → **Python** (create a minimal `requirements.txt`)
+- Unknown → ask the user
+
+### Detect start command (Node.js)
+
+Check `package.json` `scripts.start` field. If missing, look for `server.js`, `index.js`, `app.js` in that order. Default: `node server.js`.
+
+### Detect start command (Python)
+
+Look for `app.py`, `server.py`, `main.py` in that order. Default: `python app.py`.
+
+---
+
+### File: `Dockerfile` — Node.js, no SQLite
+
+```dockerfile
+FROM node:22-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+EXPOSE 8080
+CMD ["node", "<start-file>"]
+```
+
+### File: `Dockerfile` — Node.js, with SQLite (Litestream)
+
+```dockerfile
+FROM node:22-slim
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+COPY litestream.yml /etc/litestream.yml
+COPY start.sh ./
+RUN chmod +x start.sh
+EXPOSE 8080
+CMD ["./start.sh"]
+```
+
+### File: `Dockerfile` — Python, no SQLite
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8080
+CMD ["python", "<start-file>"]
+```
+
+### File: `Dockerfile` — Python, with SQLite (Litestream)
+
+```dockerfile
+FROM python:3.12-slim
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+COPY litestream.yml /etc/litestream.yml
+COPY start.sh ./
+RUN chmod +x start.sh
+EXPOSE 8080
+CMD ["./start.sh"]
+```
+
+### File: `litestream.yml` — always the same
+
+```yaml
+dbs:
+  - path: ${DB_PATH}
+    replicas:
+      - type: abs
+        account-name: ${AZURE_STORAGE_ACCOUNT_NAME}
+        account-key: ${AZURE_STORAGE_ACCOUNT_KEY}
+        bucket: ${AZURE_STORAGE_CONTAINER}
+        path: db.sqlite
+```
+
+### File: `start.sh` — Node.js
+
+```sh
+#!/bin/sh
+set -e
+litestream restore -if-replica-exists -config /etc/litestream.yml "${DB_PATH}"
+exec litestream replicate -exec "node <start-file>" -config /etc/litestream.yml
+```
+
+### File: `start.sh` — Python
+
+```sh
+#!/bin/sh
+set -e
+litestream restore -if-replica-exists -config /etc/litestream.yml "${DB_PATH}"
+exec litestream replicate -exec "python <start-file>" -config /etc/litestream.yml
+```
+
+### App code contract
+
+Remind the user their app must derive the DB path from env vars:
+
+```js
+// Node.js
+const DB_PATH = process.env.DB_PATH || require("path").join(process.env.DATA_DIR || ".", "app.db");
+```
+
+```python
+# Python
+import os, pathlib
+DB_PATH = os.environ.get("DB_PATH") or str(pathlib.Path(os.environ.get("DATA_DIR", ".")) / "app.db")
+```
+
+If the app hardcodes a DB path (e.g. `./data.db`), update it to use `DATA_DIR` before deploying.
+
 ### Re-deploy
 
 1. Call `app_deploy` with just `folder` (the absolute path)
@@ -103,6 +276,90 @@ The dashboard app (`apps` slug) cannot be deleted.
 1. Call `dashboard_rebuild` (no arguments)
 2. This regenerates the dashboard at `https://apps.env.fidoo.cloud` from current Azure state
 3. Use this if the dashboard is out of sync
+
+## Troubleshooting Container Apps
+
+All debugging uses `curl` with ARM REST APIs — no `az` CLI dependency. Read the ARM token from the token store:
+
+```bash
+TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.deploy-agent/tokens.json'))['access_token'])")
+SUB="<subscription-id>"
+RG="<resource-group>"
+```
+
+### App not responding — quick health check
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://{app-url}/
+```
+
+### Check Container App config and FQDN
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}?api-version=2024-03-01" \
+  | python3 -m json.tool
+```
+
+### Restart a Container App revision
+
+```bash
+# Get the active revision name
+REVISION=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}/revisions?api-version=2024-03-01" \
+  | python3 -c "import json,sys; revs=json.load(sys.stdin)['value']; print(next(r['name'] for r in revs if r['properties'].get('active')))")
+
+# Restart it (Content-Length: 0 is required)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Length: 0" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/containerApps/{slug}/revisions/$REVISION/restart?api-version=2024-03-01"
+```
+
+### Check ACR image tags
+
+Uses ACR admin credentials (already in MCP config):
+
+```bash
+curl -s -u "{acr-admin-username}:{acr-admin-password}" \
+  "https://{acr-login-server}/v2/{slug}/tags/list" | python3 -m json.tool
+```
+
+### Read ACR build logs
+
+After a failed `container_deploy`, extract the run ID from the error message:
+
+```bash
+# Get the log download URL (Content-Length: 0 is required)
+LOG_URL=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Length: 0" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ContainerRegistry/registries/{acr-name}/runs/{run-id}/listLogSasUrl?api-version=2019-06-01-preview" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['logLink'])")
+
+# Fetch the actual logs
+curl -s "$LOG_URL"
+```
+
+### Container App runtime logs (Log Analytics)
+
+Find the Log Analytics workspace name (query via ARM proxy — the `api.loganalytics.io` endpoint requires a different token scope):
+
+```bash
+WORKSPACE=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://management.azure.com/subscriptions/$SUB/providers/Microsoft.OperationalInsights/workspaces?api-version=2022-10-01" \
+  | python3 -c "import json,sys; ws=json.load(sys.stdin)['value']; print(ws[0]['name'])")
+```
+
+Then query the logs through the ARM proxy:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WORKSPACE/api/query?api-version=2020-08-01" \
+  -d '{"query": "ContainerAppConsoleLogs_CL | where ContainerAppName_s == \"{slug}\" | top 50 by TimeGenerated | project TimeGenerated, Log_s"}' \
+  | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for row in d['Tables'][0]['Rows']:
+  print(row[0][:19], row[1].strip() if row[1] else '')
+"
+```
 
 ## Important Notes
 

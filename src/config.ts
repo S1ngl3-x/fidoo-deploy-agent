@@ -7,7 +7,20 @@ export function buildConfig() {
     storageAccount: process.env.DEPLOY_AGENT_STORAGE_ACCOUNT ?? "PLACEHOLDER_STORAGE_ACCOUNT",
     containerName: process.env.DEPLOY_AGENT_CONTAINER_NAME ?? "app-content",
     appDomain: process.env.DEPLOY_AGENT_APP_DOMAIN ?? "ai-apps.env.fidoo.cloud",
-    swaSlug: process.env.DEPLOY_AGENT_SWA_SLUG ?? "swa-ai-apps",
+    swaSlug:           process.env.DEPLOY_AGENT_SWA_SLUG           ?? "swa-ai-apps",
+    // Container deploy
+    acrName:           process.env.DEPLOY_AGENT_ACR_NAME           ?? "",
+    acrLoginServer:    process.env.DEPLOY_AGENT_ACR_LOGIN_SERVER    ?? "",
+    containerEnvName:  process.env.DEPLOY_AGENT_CONTAINER_ENV_NAME ?? "",
+    containerDomain:   process.env.DEPLOY_AGENT_CONTAINER_DOMAIN   ?? "api.env.fidoo.cloud",
+    pullIdentityId:    process.env.DEPLOY_AGENT_PULL_IDENTITY_ID    ?? "",
+    storageKey:        process.env.DEPLOY_AGENT_STORAGE_KEY         ?? "",
+    acrAdminUsername:  process.env.DEPLOY_AGENT_ACR_ADMIN_USERNAME  ?? "",
+    acrAdminPassword:  process.env.DEPLOY_AGENT_ACR_ADMIN_PASSWORD  ?? "",
+    // Easy Auth (reuses Deploy Portal AD app registration for container apps)
+    portalClientId:     process.env.DEPLOY_AGENT_PORTAL_CLIENT_ID     ?? "",  // TODO: get from security — Deploy Portal app registration client ID
+    portalClientSecret: process.env.DEPLOY_AGENT_PORTAL_CLIENT_SECRET ?? "",  // TODO: get from security — Deploy Portal app registration client secret
+    defaultPort:       Number(process.env.DEPLOY_AGENT_DEFAULT_PORT ?? "8080"),
     armScope: "https://management.azure.com/.default offline_access",
     storageScope: "https://storage.azure.com/.default offline_access",
     armBaseUrl: "https://management.azure.com",

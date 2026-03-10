@@ -6,6 +6,10 @@ export interface DeployConfig {
   appName: string;
   appDescription: string;
   resourceId: string;
+  appType?:           "static" | "container";
+  containerAppId?:    string;
+  imageRepository?:   string;
+  persistentStorage?: boolean;
 }
 
 const FILE_NAME = ".deploy.json";

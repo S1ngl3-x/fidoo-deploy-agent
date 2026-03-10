@@ -358,7 +358,8 @@ export function generateDashboardHtml(apps) {
 
       apps.forEach(function(app, i) {
         var a = el("a", "card");
-        a.href = "/" + app.slug + "/";
+        a.href = app.url || ("/" + app.slug + "/");
+        if (app.url) a.target = "_blank";
         a.style.animationDelay = (i * 0.06) + "s";
 
         var top = el("div", "card-top");

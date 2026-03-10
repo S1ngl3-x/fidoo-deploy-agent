@@ -28,6 +28,10 @@ SWA_NAME="swa-${SWA_SLUG}"
 STORAGE_ACCOUNT="stpublishedapps"          # Must be globally unique, 3-24 lowercase alphanumeric
 CONTAINER_NAME="app-content"               # Blob container for app files + registry
 APP_DOMAIN="ai-apps.env.fidoo.cloud"       # Custom domain (DNS configured manually)
+ACR_NAME="fidooapps"
+CONTAINER_ENV_NAME="fidoo-vibe-env"
+PULL_IDENTITY_NAME="fidoo-vibe-container-puller"
+CONTAINER_DOMAIN="api.env.fidoo.cloud"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -235,6 +239,44 @@ else
   ok "Blob container '$CONTAINER_NAME' created"
 fi
 
+# ── 3b. Azure Container Registry ─────────────────────────────────────────────
+
+info "Checking Azure Container Registry '$ACR_NAME'..."
+
+if az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+  ok "ACR '$ACR_NAME' already exists"
+else
+  info "Creating ACR '$ACR_NAME' (Basic SKU)..."
+  az acr create \
+    --name "$ACR_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --sku Basic \
+    --location "$LOCATION" \
+    --output none
+  ok "ACR '$ACR_NAME' created"
+fi
+
+ACR_ID=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
+ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+
+# ── 3c. Container Apps Environment ───────────────────────────────────────────
+
+info "Checking Container Apps Environment '$CONTAINER_ENV_NAME'..."
+
+if az containerapp env show --name "$CONTAINER_ENV_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+  ok "Container Apps Environment '$CONTAINER_ENV_NAME' already exists"
+else
+  info "Creating Container Apps Environment '$CONTAINER_ENV_NAME'..."
+  az containerapp env create \
+    --name "$CONTAINER_ENV_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --output none
+  ok "Container Apps Environment '$CONTAINER_ENV_NAME' created"
+fi
+
+CONTAINER_ENV_ID=$(az containerapp env show --name "$CONTAINER_ENV_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
+
 # ── 4. Single Static Web App ─────────────────────────────────────────────────
 
 info "Checking SWA '$SWA_NAME'..."
@@ -339,6 +381,66 @@ az role assignment create \
   --output none 2>/dev/null || true
 ok "Contributor role assigned to group"
 
+# ── 6b. Container RBAC ────────────────────────────────────────────────────────
+# ⚠️  REQUIRES OWNER OR USER ACCESS ADMINISTRATOR
+# If you only have Contributor, ask your Azure admin to run this section.
+# Regular users DO NOT need Owner — this runs once per environment, not per deploy.
+
+info "Checking pull identity '$PULL_IDENTITY_NAME'..."
+PULL_IDENTITY_CLIENT_ID=$(az identity show \
+  --name "$PULL_IDENTITY_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query clientId -o tsv 2>/dev/null || true)
+PULL_IDENTITY_ID=$(az identity show \
+  --name "$PULL_IDENTITY_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query id -o tsv 2>/dev/null || true)
+
+if [[ -n "$PULL_IDENTITY_CLIENT_ID" && "$PULL_IDENTITY_CLIENT_ID" != "None" ]]; then
+  ok "Pull identity '$PULL_IDENTITY_NAME' already exists"
+else
+  info "Creating pull identity '$PULL_IDENTITY_NAME'..."
+  PULL_IDENTITY_CLIENT_ID=$(az identity create \
+    --name "$PULL_IDENTITY_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query clientId -o tsv)
+  PULL_IDENTITY_ID=$(az identity show \
+    --name "$PULL_IDENTITY_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query id -o tsv)
+  ok "Pull identity created (clientId: $PULL_IDENTITY_CLIENT_ID)"
+fi
+
+# AcrPull on ACR for the pull identity — lets Container Apps pull images
+info "Assigning AcrPull on '$ACR_NAME' to pull identity..."
+az role assignment create \
+  --assignee "$PULL_IDENTITY_CLIENT_ID" \
+  --role "AcrPull" \
+  --scope "$ACR_ID" \
+  --output none 2>/dev/null || true
+ok "AcrPull assigned to pull identity"
+
+# AcrPush on ACR for publisher group — lets users trigger builds
+info "Assigning AcrPush on '$ACR_NAME' to group '$GROUP_NAME'..."
+az role assignment create \
+  --assignee-object-id "$GROUP_ID" \
+  --assignee-principal-type Group \
+  --role "AcrPush" \
+  --scope "$ACR_ID" \
+  --output none 2>/dev/null || true
+ok "AcrPush assigned to group"
+
+# Contributor on Container Apps Environment for publisher group — lets users create/update apps
+info "Assigning Contributor on '$CONTAINER_ENV_NAME' to group '$GROUP_NAME'..."
+az role assignment create \
+  --assignee-object-id "$GROUP_ID" \
+  --assignee-principal-type Group \
+  --role "Contributor" \
+  --scope "$CONTAINER_ENV_ID" \
+  --output none 2>/dev/null || true
+ok "Contributor on Container Apps Environment assigned to group"
+# ── END REQUIRES OWNER ────────────────────────────────────────────────────────
+
 # ── 7. Write infra/.env ──────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -360,6 +462,12 @@ DEPLOY_AGENT_CONTAINER_NAME=$CONTAINER_NAME
 DEPLOY_AGENT_APP_DOMAIN=$APP_DOMAIN
 DEPLOY_AGENT_SWA_SLUG=$SWA_SLUG
 DEPLOY_PORTAL_CLIENT_ID=$DEPLOY_PORTAL_APP_ID
+DEPLOY_AGENT_ACR_NAME=$ACR_NAME
+DEPLOY_AGENT_ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER
+DEPLOY_AGENT_CONTAINER_ENV_NAME=$CONTAINER_ENV_NAME
+DEPLOY_AGENT_CONTAINER_DOMAIN=$CONTAINER_DOMAIN
+DEPLOY_AGENT_PULL_IDENTITY_ID=$PULL_IDENTITY_ID
+DEPLOY_AGENT_DEFAULT_PORT=8080
 EOF
 
 ok "Config written to $ENV_FILE"

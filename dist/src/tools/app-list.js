@@ -29,8 +29,9 @@ export const handler = async (_args) => {
             slug: app.slug,
             name: app.name,
             description: app.description,
-            url: `https://${config.appDomain}/${app.slug}/`,
+            url: app.type === "container" ? (app.url ?? "") : `https://${config.appDomain}/${app.slug}/`,
             deployedAt: app.deployedAt,
+            type: app.type ?? "static",
         }));
         return {
             content: [{ type: "text", text: JSON.stringify({ apps }) }],

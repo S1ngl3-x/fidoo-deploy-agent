@@ -4,6 +4,11 @@ export interface AppEntry {
     description: string;
     deployedAt: string;
     deployedBy: string;
+    url?: string;
+    type?: "static" | "container";
+    containerAppId?: string;
+    imageRepository?: string;
+    persistentStorage?: boolean;
 }
 export interface Registry {
     apps: AppEntry[];

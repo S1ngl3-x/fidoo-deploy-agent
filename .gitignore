@@ -1,3 +1,5 @@
 node_modules/
 .DS_Store
 infra/.env
+infra/adam-setup.sh
+infra/.env.fish
