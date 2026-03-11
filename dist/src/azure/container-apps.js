@@ -76,7 +76,12 @@ export async function createOrUpdateContainerApp(token, opts) {
             throw new Error(`Container App poll failed: ${poll.status} ${await poll.text()}`);
         const data = await poll.json();
         if (data.properties.provisioningState === "Succeeded") {
-            return `https://${data.properties.configuration.ingress.fqdn}`;
+            // Use custom domain suffix URL when configured (e.g. easy-auth-test.api.env.fidoo.cloud),
+            // falling back to the default ACA FQDN if containerDomain is not set.
+            const fqdn = config.containerDomain
+                ? `${opts.slug}.${config.containerDomain}`
+                : data.properties.configuration.ingress.fqdn;
+            return `https://${fqdn}`;
         }
         if (data.properties.provisioningState === "Failed") {
             throw new Error("Container App provisioning failed");
