@@ -2,16 +2,16 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Publisher (Claude Code + MCP plugin)                                        │
-│                                                                               │
-│  app_deploy / container_deploy / app_delete                                  │
+│  Publisher (Claude Code + MCP plugin)                                       │
+│                                                                             │
+│  app_deploy / container_deploy / app_delete                                 │
 └────────────────────────────┬────────────────────────────────────────────────┘
                              │ ARM token (device code flow)
                              │ Storage token
                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Azure                                                                        │
-│                                                                               │
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Azure                                                                       │
+│                                                                              │
 │  ┌─────────────────────────────┐    ┌──────────────────────────────────────┐ │
 │  │  Static App path            │    │  Container App path                  │ │
 │  │                             │    │                                      │ │
@@ -24,21 +24,21 @@
 │  │  └─ /{slug}/ (app files)    │    │      ├─ Image pull (managed identity)│ │
 │  │  └─ / (dashboard)           │    │      └─ Blob (SQLite, optional)      │ │
 │  └─────────────────────────────┘    └──────────────────────────────────────┘ │
-│                                                                               │
-│  Entra ID                                                                     │
-│  ├─ Deploy Plugin app reg   (publisher auth)                                  │
-│  ├─ Deploy Portal app reg   (end-user auth — SWA + Container Apps)            │
-│  └─ Graph SP                (redirect URI management)                         │
-└─────────────────────────────────────────────────────────────────────────────┘
+│                                                                              │
+│  Entra ID                                                                    │
+│  ├─ Deploy Plugin app reg   (publisher auth)                                 │
+│  ├─ Deploy Portal app reg   (end-user auth — SWA + Container Apps)           │
+│  └─ Graph SP                (redirect URI management)                        │
+└──────────────────────────────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  End Users                                                                    │
-│                                                                               │
+│  End Users                                                                  │
+│                                                                             │
 │  https://ai-apps.env.fidoo.cloud/{slug}/     ← static apps                  │
 │  https://{slug}.api.env.fidoo.cloud/         ← container apps               │
-│                                                                               │
-│  Both protected by Entra ID login (Deploy Portal app registration)           │
+│                                                                             │
+│  Both protected by Entra ID login (Deploy Portal app registration)          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
