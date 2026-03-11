@@ -61,14 +61,25 @@ az ad app credential reset --id <DEPLOY_PORTAL_APP_ID> --display-name swa-auth -
 
 DNS: CNAME `ai-apps.env.fidoo.cloud` pointing to the SWA default hostname, then add the custom domain to the SWA.
 
+### Container Apps RBAC (one-time admin setup)
+
+The `fi-aiapps-pub` group needs Contributor on both the ACR and the Container Apps Environment
+to deploy container apps. Run once after `setup.sh`:
+
+```bash
+./infra/grant-container-permissions.sh
+```
+
+Requires Owner or User Access Administrator on `rg-alipowski-test`.
+
 ### Onboarding a new publisher
 
 ```bash
 # Get the user's object ID
-az ad user show --id user@FidooFXtest.onmicrosoft.com --query id -o tsv
+USER_ID=$(az ad user show --id user@FidooFXtest.onmicrosoft.com --query id -o tsv)
 
-# Add them to the publisher group
-az ad group member add --group fi-aiapps-pub --member-id <user-object-id>
+# Add them to the publisher group (grants all required RBAC roles)
+az ad group member add --group fi-aiapps-pub --member-id "$USER_ID"
 ```
 
 ## MCP Tools

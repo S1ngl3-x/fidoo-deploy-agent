@@ -15,7 +15,7 @@ function armHeaders(token: string): Record<string, string> {
 export async function listBuildSourceUploadUrl(
   token: string,
 ): Promise<{ uploadUrl: string; relativePath: string }> {
-  const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/listBuildSourceUploadUrl?api-version=${ACR_API}`;
+  const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/listBuildSourceUploadUrl?api-version=${ACR_API}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -60,7 +60,7 @@ export async function scheduleAcrBuild(
   imageTag: string,
   sourceLocation: string,
 ): Promise<string> {
-  const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/scheduleRun?api-version=${ACR_API}`;
+  const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/scheduleRun?api-version=${ACR_API}`;
 
   const body = {
     type: "DockerBuildRequest",
@@ -91,7 +91,7 @@ export async function pollAcrBuild(
   runId: string,
   onLog?: (line: string) => void,
 ): Promise<void> {
-  const runUrl = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/runs/${runId}?api-version=${ACR_API}`;
+  const runUrl = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/runs/${runId}?api-version=${ACR_API}`;
 
   for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 5000));

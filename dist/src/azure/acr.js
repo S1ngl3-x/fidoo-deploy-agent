@@ -10,7 +10,7 @@ function armHeaders(token) {
 // Returns { uploadUrl, relativePath } — uploadUrl is Azure Files SAS,
 // relativePath goes into scheduleAcrBuild as sourceLocation.
 export async function listBuildSourceUploadUrl(token) {
-    const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/listBuildSourceUploadUrl?api-version=${ACR_API}`;
+    const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/listBuildSourceUploadUrl?api-version=${ACR_API}`;
     const res = await fetch(url, {
         method: "POST",
         headers: armHeaders(token),
@@ -43,7 +43,7 @@ export async function uploadSourceBlob(uploadUrl, content) {
 // sourceLocation: relative path from listBuildSourceUploadUrl (NOT a full URL)
 // Returns: the run ID string
 export async function scheduleAcrBuild(token, imageTag, sourceLocation) {
-    const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/scheduleRun?api-version=${ACR_API}`;
+    const url = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/scheduleRun?api-version=${ACR_API}`;
     const body = {
         type: "DockerBuildRequest",
         imageNames: [imageTag],
@@ -65,7 +65,7 @@ export async function scheduleAcrBuild(token, imageTag, sourceLocation) {
 }
 // Poll until the build succeeds or fails. 5s interval, 10 minute timeout.
 export async function pollAcrBuild(token, runId, onLog) {
-    const runUrl = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/runs/${runId}?api-version=${ACR_API}`;
+    const runUrl = `${config.armBaseUrl}/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.ContainerRegistry/registries/${config.acrName}/runs/${runId}?api-version=${ACR_API}`;
     for (let i = 0; i < 120; i++) {
         await new Promise((r) => setTimeout(r, 5000));
         const res = await fetch(runUrl, { headers: armHeaders(token) });
