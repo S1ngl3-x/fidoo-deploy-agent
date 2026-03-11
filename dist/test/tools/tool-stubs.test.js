@@ -10,10 +10,12 @@ const EXPECTED_TOOLS = [
     "app_list",
     "app_info",
     "app_update_info",
+    "container_deploy",
+    "container_delete",
 ];
 describe("tool registry", () => {
-    it("contains exactly 8 tools", () => {
-        assert.equal(toolRegistry.size, 8);
+    it("contains exactly 10 tools", () => {
+        assert.equal(toolRegistry.size, 10);
     });
     for (const name of EXPECTED_TOOLS) {
         it(`has tool '${name}' with definition and handler`, () => {

@@ -21,7 +21,7 @@ MCP server plugin for Claude Code that deploys static HTML/JS apps to a single A
 
 **Protocol:** JSON-RPC 2.0 over stdio. `src/protocol.ts` handles message framing, `src/server.ts` routes `initialize`, `tools/list`, and `tools/call` methods.
 
-**Tool pattern:** Each tool in `src/tools/` exports `definition: ToolDefinition` (name, description, inputSchema) and `handler: ToolHandler` (async function returning `{ content: [{type: "text", text: string}], isError?: boolean }`). All 8 tools are registered in `src/tools/index.ts`: `auth_login`, `auth_poll`, `auth_status`, `app_deploy`, `app_delete`, `app_list`, `app_info`, `app_update_info`.
+**Tool pattern:** Each tool in `src/tools/` exports `definition: ToolDefinition` (name, description, inputSchema) and `handler: ToolHandler` (async function returning `{ content: [{type: "text", text: string}], isError?: boolean }`). All 10 tools are registered in `src/tools/index.ts`: `auth_login`, `auth_poll`, `auth_status`, `app_deploy`, `app_delete`, `app_list`, `app_info`, `app_update_info`, `container_deploy`, `container_delete`.
 
 **Auth flow:** OAuth2 device code flow via `src/auth/device-code.ts`. Two scoped tokens from a single refresh token: `access_token` (ARM scope, for SWA management) and `storage_access_token` (Storage scope, for blob operations). Both tracked independently with `expires_at` / `storage_expires_at`. Cached to `~/.deploy-agent/tokens.json` (mode 0600). `src/auth/jwt.ts` decodes the ARM token without verification to extract display name for audit tagging. Override dir with `DEPLOY_AGENT_TOKEN_DIR` env var (used in tests).
 

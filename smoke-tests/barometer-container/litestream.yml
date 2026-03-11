@@ -1,0 +1,8 @@
+dbs:
+  - path: ${DB_PATH}
+    replicas:
+      - type: abs
+        account-name: ${AZURE_STORAGE_ACCOUNT_NAME}
+        account-key: ${AZURE_STORAGE_ACCOUNT_KEY}
+        bucket: ${AZURE_STORAGE_CONTAINER}
+        path: barometer.db

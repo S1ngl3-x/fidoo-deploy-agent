@@ -61,11 +61,9 @@ describe("generateDashboardHtml", () => {
             { slug: "calc", name: "Calculator", description: "A calc", deployedAt: "2026-01-01T00:00:00Z", deployedBy: "u" },
         ];
         const html = generateDashboardHtml(apps);
-        // URL is constructed at runtime via JS: "/" + app.slug + "/"
-        assert.ok(html.includes('"/" + app.slug + "/"'));
-        // Should NOT reference app.url (old subdomain pattern)
-        assert.ok(!html.includes("app.url"));
-        assert.ok(!html.includes(".env.fidoo.cloud")); // no per-app subdomain
+        // Static apps use path-based URL, container apps use app.url
+        assert.ok(html.includes('app.url || ("/" + app.slug + "/")'));
+        assert.ok(!html.includes(".env.fidoo.cloud")); // no per-app subdomain in template
     });
 });
 //# sourceMappingURL=dashboard.test.js.map

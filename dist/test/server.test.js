@@ -16,9 +16,9 @@ describe("MCP server handlers", () => {
         });
     });
     describe("tools/list", () => {
-        it("returns 8 tools", async () => {
+        it("returns 10 tools", async () => {
             const result = await handleToolsList();
-            assert.equal(result.tools.length, 8);
+            assert.equal(result.tools.length, 10);
         });
         it("each tool has name, description, and inputSchema", async () => {
             const result = await handleToolsList();
