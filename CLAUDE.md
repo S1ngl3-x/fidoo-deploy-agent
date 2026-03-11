@@ -13,7 +13,7 @@ node --test dist/test/tools/app-list.test.js             # Run a single test fil
 node --test dist/test/integration/*.test.js              # Integration tests only (end-to-end MCP + deploy flow)
 ```
 
-Always `npm run build` before running tests — tests run from `dist/`.
+Always `npm run build` before running tests — tests run from `dist/`. Note: `dist/` is gitignored; it exists only locally for development. The plugin runs via `npx tsx` in production (no build step needed for end users).
 
 ## Architecture
 
