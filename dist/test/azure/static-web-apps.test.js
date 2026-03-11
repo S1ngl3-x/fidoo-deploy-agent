@@ -29,8 +29,8 @@ describe("createStaticWebApp", () => {
         assert.equal(calls[0].init?.method, "PUT");
         const body = JSON.parse(calls[0].init?.body);
         assert.equal(body.location, "westeurope");
-        assert.equal(body.sku.name, "Free");
-        assert.equal(body.sku.tier, "Free");
+        assert.equal(body.sku.name, "Standard");
+        assert.equal(body.sku.tier, "Standard");
         assert.equal(body.tags.appName, "My App");
         assert.equal(body.tags.appDescription, "A test app");
     });

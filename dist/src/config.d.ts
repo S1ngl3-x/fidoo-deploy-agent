@@ -3,6 +3,7 @@ export declare function buildConfig(): {
     clientId: string;
     subscriptionId: string;
     resourceGroup: string;
+    containerResourceGroup: string;
     storageAccount: string;
     containerName: string;
     appDomain: string;
@@ -15,6 +16,11 @@ export declare function buildConfig(): {
     storageKey: string;
     acrAdminUsername: string;
     acrAdminPassword: string;
+    portalClientId: string;
+    portalClientSecret: string;
+    portalObjectId: string;
+    graphSpClientId: string;
+    graphSpClientSecret: string;
     defaultPort: number;
     armScope: string;
     storageScope: string;
@@ -31,6 +37,7 @@ export declare const config: {
     clientId: string;
     subscriptionId: string;
     resourceGroup: string;
+    containerResourceGroup: string;
     storageAccount: string;
     containerName: string;
     appDomain: string;
@@ -43,6 +50,11 @@ export declare const config: {
     storageKey: string;
     acrAdminUsername: string;
     acrAdminPassword: string;
+    portalClientId: string;
+    portalClientSecret: string;
+    portalObjectId: string;
+    graphSpClientId: string;
+    graphSpClientSecret: string;
     defaultPort: number;
     armScope: string;
     storageScope: string;

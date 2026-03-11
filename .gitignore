@@ -3,3 +3,4 @@ node_modules/
 infra/.env
 infra/adam-setup.sh
 infra/.env.fish
+infra/certs/

@@ -38,7 +38,7 @@ describe("config", () => {
     it("buildConfig uses hardcoded defaults when no env vars set", async () => {
         const { buildConfig } = await import("../src/config.js");
         const cfg = buildConfig();
-        assert.equal(cfg.tenantId, "7d8c4da5-9bcc-48dd-ace3-fb4681cf4277");
+        assert.equal(cfg.tenantId, "7bcac0ca-0725-4318-9adc-e9b670a48e92");
         assert.equal(cfg.clientId, "PLACEHOLDER_CLIENT_ID");
         assert.equal(cfg.subscriptionId, "PLACEHOLDER_SUBSCRIPTION_ID");
         assert.equal(cfg.resourceGroup, "rg-published-apps");
@@ -142,8 +142,45 @@ describe("config", () => {
         assert.equal(cfg.entraBaseUrl, "https://login.microsoftonline.com");
         assert.equal(cfg.swaApiVersion, "2022-09-01");
         assert.equal(cfg.storageApiVersion, "2024-11-04");
-        assert.equal(cfg.swaSkuName, "Free");
-        assert.equal(cfg.swaSkuTier, "Free");
+        assert.equal(cfg.swaSkuName, "Standard");
+        assert.equal(cfg.swaSkuTier, "Standard");
+    });
+    it("portalObjectId defaults to empty string", async () => {
+        delete process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID;
+        const { buildConfig } = await import("../src/config.js");
+        const c = buildConfig();
+        assert.equal(c.portalObjectId, "");
+    });
+    it("graphSpClientId defaults to empty string", async () => {
+        delete process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_ID;
+        const { buildConfig } = await import("../src/config.js");
+        const c = buildConfig();
+        assert.equal(c.graphSpClientId, "");
+    });
+    it("graphSpClientSecret defaults to empty string", async () => {
+        delete process.env.DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET;
+        const { buildConfig } = await import("../src/config.js");
+        const c = buildConfig();
+        assert.equal(c.graphSpClientSecret, "");
+    });
+    it("containerResourceGroup defaults to resourceGroup value", async () => {
+        const { buildConfig } = await import("../src/config.js");
+        const cfg = buildConfig();
+        assert.equal(cfg.containerResourceGroup, cfg.resourceGroup);
+    });
+    it("reads containerResourceGroup from DEPLOY_AGENT_CONTAINER_RESOURCE_GROUP", async () => {
+        process.env.DEPLOY_AGENT_CONTAINER_RESOURCE_GROUP = "rg-containers";
+        const { buildConfig } = await import("../src/config.js");
+        const cfg = buildConfig();
+        assert.equal(cfg.containerResourceGroup, "rg-containers");
+        delete process.env.DEPLOY_AGENT_CONTAINER_RESOURCE_GROUP;
+    });
+    it("reads portalObjectId from env", async () => {
+        process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID = "obj-123";
+        const { buildConfig } = await import("../src/config.js");
+        const c = buildConfig();
+        assert.equal(c.portalObjectId, "obj-123");
+        delete process.env.DEPLOY_AGENT_PORTAL_OBJECT_ID;
     });
     it("config export equals buildConfig() result", async () => {
         const { config, buildConfig } = await import("../src/config.js");

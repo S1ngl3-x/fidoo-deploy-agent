@@ -1,6 +1,6 @@
 import { loadTokens, isTokenExpired } from "../auth/token-store.js";
 import { loadRegistry, saveRegistry, removeApp } from "../deploy/registry.js";
-import { deleteContainerApp } from "../azure/container-apps.js";
+import { deleteContainerApp, removeEasyAuth } from "../azure/container-apps.js";
 import { deleteBlobContainer } from "../azure/blob.js";
 import { deploySite } from "../deploy/site-deploy.js";
 export const definition = {
@@ -64,6 +64,11 @@ export const handler = async (args) => {
                 isError: true,
             };
         }
+        // Remove Easy Auth redirect URI (skipped if Graph SP not configured)
+        try {
+            await removeEasyAuth(slug);
+        }
+        catch { /* graph credentials not configured */ }
         // Delete Container App
         await deleteContainerApp(armToken, slug);
         // Delete data blob container if persistent
