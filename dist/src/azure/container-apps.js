@@ -119,6 +119,17 @@ export async function configureEasyAuth(token, slug) {
                 properties: { configuration: { secrets: existingSecrets } },
             }),
         });
+        // Wait for the secrets PATCH to complete before applying authConfigs — the PATCH
+        // triggers an app update cycle and authConfigs PUT fails if the app is still updating.
+        for (let i = 0; i < 24; i++) {
+            await new Promise((r) => setTimeout(r, 5000));
+            const poll = await fetch(appUrl, { headers: h(token) });
+            if (poll.ok) {
+                const d = await poll.json();
+                if (d.properties.provisioningState === "Succeeded")
+                    break;
+            }
+        }
     }
     // 3. Configure authConfigs/current
     const authUrl = `${config.armBaseUrl}${containerAppPath}/authConfigs/current?api-version=${CA_API}`;
