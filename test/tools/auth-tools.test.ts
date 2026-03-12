@@ -206,7 +206,9 @@ describe("auth_poll tool", () => {
 
     const result = await authPollHandler({ device_code: "DEV123" });
     const text = result.content[0].text;
-    const parsed = JSON.parse(text);
+    // Response text may have a vault warning appended after the JSON
+    const jsonPart = text.replace(/ \(vault token failed:.*\)$/, "");
+    const parsed = JSON.parse(jsonPart);
 
     assert.equal(parsed.status, "authenticated");
     assert.ok(parsed.expires_at);
@@ -219,6 +221,63 @@ describe("auth_poll tool", () => {
     assert.equal(stored.vault_access_token, "vault-new");
     assert.ok(stored.vault_expires_at);
     assert.ok(stored.refresh_token);
+  });
+
+  it("saves ARM and storage tokens even when vault exchange fails", async () => {
+    mockFetch((url, init) => {
+      if (url.includes("/token")) {
+        const body = typeof init?.body === "string" ? init.body : "";
+
+        if (body.includes("device_code")) {
+          return {
+            status: 200,
+            body: {
+              access_token: "arm-ok",
+              refresh_token: "refresh-1",
+              expires_in: 3600,
+              token_type: "Bearer",
+            },
+          };
+        }
+
+        if (body.includes("grant_type=refresh_token")) {
+          if (body.includes("storage.azure.com")) {
+            return {
+              status: 200,
+              body: {
+                access_token: "storage-ok",
+                refresh_token: "refresh-2",
+                expires_in: 3600,
+                token_type: "Bearer",
+              },
+            };
+          }
+          if (body.includes("vault.azure.net")) {
+            return {
+              status: 400,
+              body: { error: "invalid_grant", error_description: "No consent" },
+            };
+          }
+        }
+
+        return { status: 200, body: { access_token: "fb", refresh_token: "fb", expires_in: 3600, token_type: "Bearer" } };
+      }
+      return undefined;
+    });
+
+    const result = await authPollHandler({ device_code: "DEV123" });
+
+    assert.equal(result.isError, undefined);
+    assert.ok(result.content[0].text.includes("authenticated"));
+    assert.ok(result.content[0].text.includes("vault token failed"));
+
+    // ARM + Storage tokens saved despite vault failure
+    const storedRaw = fs.readFileSync(path.join(tmpDir, "tokens.json"), "utf-8");
+    const stored = JSON.parse(storedRaw);
+    assert.equal(stored.access_token, "arm-ok");
+    assert.equal(stored.storage_access_token, "storage-ok");
+    assert.equal(stored.refresh_token, "refresh-2"); // storage refresh token used as fallback
+    assert.equal(stored.vault_access_token, undefined);
   });
 
   it("returns error when device_code is missing", async () => {
