@@ -42,12 +42,22 @@ export async function createOrUpdateContainerApp(
       ]
     : [];
 
+  // Use managed identity for ACR pull when configured, otherwise fall back to admin credentials
+  const useManagedIdentity = !!config.pullIdentityId;
+  const identity = useManagedIdentity
+    ? { type: "UserAssigned", userAssignedIdentities: { [config.pullIdentityId]: {} } }
+    : undefined;
+  const registries = useManagedIdentity
+    ? [{ server: config.acrLoginServer, identity: config.pullIdentityId }]
+    : [{ server: config.acrLoginServer, username: config.acrAdminUsername, passwordSecretRef: "acr-admin-password" }];
+
+  if (!useManagedIdentity) {
+    secrets.push({ name: "acr-admin-password", value: config.acrAdminPassword });
+  }
+
   const body = {
     location: config.location,
-    identity: {
-      type: "UserAssigned",
-      userAssignedIdentities: { [config.pullIdentityId]: {} },
-    },
+    ...(identity ? { identity } : {}),
     properties: {
       environmentId: envId,
       configuration: {
@@ -57,12 +67,7 @@ export async function createOrUpdateContainerApp(
           targetPort: opts.port,
           transport: "http",
         },
-        registries: [
-          {
-            server: config.acrLoginServer,
-            identity: config.pullIdentityId,
-          },
-        ],
+        registries,
       },
       template: {
         containers: [
@@ -125,7 +130,7 @@ export async function configureEasyAuth(
   slug: string,
 ): Promise<void> {
   if (!config.portalClientId || !config.portalClientSecret) {
-    return; // Easy Auth not configured — skip silently
+    throw new Error(`Easy Auth not configured: portalClientId=${config.portalClientId ? "(set)" : "(empty)"}, portalClientSecret=${config.portalClientSecret ? "(set)" : "(empty)"}`);
   }
 
   // 1. Register redirect URI on Deploy Portal app registration (requires Graph SP)
@@ -136,25 +141,38 @@ export async function configureEasyAuth(
 
   const containerAppPath = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.containerResourceGroup}/providers/Microsoft.App/containerApps/${slug}`;
 
-  // 2. Inject portal client secret into Container App secrets
+  // 2. Inject portal client secret into Container App secrets.
+  // ARM GET redacts secret values, so we cannot read-merge-write. Instead, check if the
+  // secret name already exists and only PATCH if it's missing, re-sending all secret values.
   const appUrl = `${config.armBaseUrl}${containerAppPath}?api-version=${CA_API}`;
   const appRes = await fetch(appUrl, { headers: h(token) });
   if (!appRes.ok) {
     throw new Error(`Easy Auth: failed to read Container App: ${appRes.status} ${await appRes.text()}`);
   }
   const appData = await appRes.json() as {
-    properties: { configuration: { secrets: { name: string; value: string }[] } };
+    properties: { configuration: { secrets: { name: string; value?: string }[] } };
   };
-  const existingSecrets = appData.properties.configuration.secrets ?? [];
-  if (!existingSecrets.some((s: { name: string }) => s.name === "portal-client-secret")) {
-    existingSecrets.push({ name: "portal-client-secret", value: config.portalClientSecret });
-    await fetch(appUrl, {
+  const existingSecretNames = (appData.properties.configuration.secrets ?? []).map((s) => s.name);
+  if (!existingSecretNames.includes("portal-client-secret")) {
+    // Re-send existing secrets with their actual values (ARM redacts them in GET responses)
+    const allSecrets: { name: string; value: string }[] = [];
+    if (existingSecretNames.includes("azure-storage-account-key")) {
+      allSecrets.push({ name: "azure-storage-account-key", value: config.storageKey });
+    }
+    if (existingSecretNames.includes("acr-admin-password")) {
+      allSecrets.push({ name: "acr-admin-password", value: config.acrAdminPassword });
+    }
+    allSecrets.push({ name: "portal-client-secret", value: config.portalClientSecret });
+    const patchRes = await fetch(appUrl, {
       method: "PATCH",
       headers: h(token),
       body: JSON.stringify({
-        properties: { configuration: { secrets: existingSecrets } },
+        properties: { configuration: { secrets: allSecrets } },
       }),
     });
+    if (!patchRes.ok) {
+      throw new Error(`Easy Auth: failed to inject portal-client-secret: ${patchRes.status} ${await patchRes.text()}`);
+    }
     // Wait for the secrets PATCH to complete before applying authConfigs — the PATCH
     // triggers an app update cycle and authConfigs PUT fails if the app is still updating.
     for (let i = 0; i < 24; i++) {
@@ -179,7 +197,7 @@ export async function configureEasyAuth(
       identityProviders: {
         azureActiveDirectory: {
           registration: {
-            openIdIssuerUrl: `https://login.microsoftonline.com/${config.tenantId}/v2.0`,
+            openIdIssuer: `https://login.microsoftonline.com/${config.tenantId}/v2.0`,
             clientId: config.portalClientId,
             clientSecretSettingName: "portal-client-secret",
           },
