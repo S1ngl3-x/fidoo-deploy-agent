@@ -16,7 +16,7 @@ let originalFetch: typeof globalThis.fetch;
 let calls: Array<{ url: string; init?: RequestInit }> = [];
 
 export function mockFetch(matcher: RequestMatcher): void {
-  matchers.push(matcher);
+  matchers.unshift(matcher);
 }
 
 export function mockFetchOnce(response: MockResponse, urlMatch?: string): void {

@@ -3,6 +3,9 @@
  * No dependencies — uses global fetch.
  */
 
+import { config } from "../config.js";
+import { loadTokens, saveTokens } from "./token-store.js";
+
 export interface DeviceCodeResponse {
   device_code: string;
   user_code: string;
@@ -144,4 +147,26 @@ export async function refreshAccessToken(
   }
 
   return body as TokenResponse;
+}
+
+export async function refreshVaultToken(refreshToken: string): Promise<string> {
+  const response = await refreshAccessToken(
+    config.tenantId,
+    config.clientId,
+    refreshToken,
+    config.vaultScope,
+  );
+
+  // Load-merge-save: preserve existing ARM/Storage tokens, update only vault fields
+  const existing = await loadTokens();
+  if (existing) {
+    await saveTokens({
+      ...existing,
+      vault_access_token: response.access_token,
+      vault_expires_at: Date.now() + response.expires_in * 1000,
+      refresh_token: response.refresh_token ?? existing.refresh_token,
+    });
+  }
+
+  return response.access_token;
 }

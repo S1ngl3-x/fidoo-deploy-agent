@@ -14,9 +14,11 @@ import os from "node:os";
 export interface StoredTokens {
   access_token: string;          // ARM-scoped token
   storage_access_token: string;  // Storage-scoped token
+  vault_access_token?: string;   // Key Vault-scoped token (optional for backward compat)
   refresh_token: string;
-  expires_at: number; // Unix timestamp ms (ARM token)
-  storage_expires_at: number; // Unix timestamp ms (storage token)
+  expires_at: number;            // Unix timestamp ms (ARM token)
+  storage_expires_at: number;    // Unix timestamp ms (storage token)
+  vault_expires_at?: number;     // Unix timestamp ms (vault token, optional for backward compat)
 }
 
 const TOKENS_FILE = "tokens.json";

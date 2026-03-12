@@ -58,6 +58,7 @@ MCP server plugin for Claude Code that deploys static HTML/JS apps to a single A
 | `DEPLOY_AGENT_PORTAL_OBJECT_ID` | Deploy Portal AAD app object ID (for Graph PATCH) | (required for Easy Auth) |
 | `DEPLOY_AGENT_GRAPH_SP_CLIENT_ID` | Graph SP client ID | (required for Easy Auth) |
 | `DEPLOY_AGENT_GRAPH_SP_CLIENT_SECRET` | Graph SP client secret | (required for Easy Auth) |
+| `DEPLOY_AGENT_KEY_VAULT_NAME` | Azure Key Vault name (enables runtime secret resolution) | (optional) |
 
 ## Key Conventions
 

@@ -4,5 +4,5 @@ infra/.env
 infra/adam-setup.sh
 infra/.env.fish
 infra/certs/
-.mcp.json
+
 .env
