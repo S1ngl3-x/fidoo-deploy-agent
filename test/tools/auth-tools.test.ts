@@ -150,24 +150,52 @@ describe("auth_poll tool", () => {
       if (url.includes("/token")) {
         callCount++;
         const body = typeof init?.body === "string" ? init.body : "";
-        // Second call is the storage token refresh
-        if (body.includes("refresh_token") && body.includes("grant_type=refresh_token")) {
+
+        // First call: device code poll -> ARM token
+        if (body.includes("device_code")) {
           return {
             status: 200,
             body: {
-              access_token: "storage-new",
-              refresh_token: "refresh-updated",
+              access_token: "access-new",
+              refresh_token: "refresh-new",
               expires_in: 3600,
               token_type: "Bearer",
             },
           };
         }
-        // First call is the device code poll
+
+        // Refresh token exchanges (storage then vault)
+        if (body.includes("grant_type=refresh_token")) {
+          if (body.includes("storage.azure.com")) {
+            return {
+              status: 200,
+              body: {
+                access_token: "storage-new",
+                refresh_token: "refresh-updated",
+                expires_in: 3600,
+                token_type: "Bearer",
+              },
+            };
+          }
+          if (body.includes("vault.azure.net")) {
+            return {
+              status: 200,
+              body: {
+                access_token: "vault-new",
+                refresh_token: "refresh-final",
+                expires_in: 3600,
+                token_type: "Bearer",
+              },
+            };
+          }
+        }
+
+        // Fallback for any unmatched /token call
         return {
           status: 200,
           body: {
-            access_token: "access-new",
-            refresh_token: "refresh-new",
+            access_token: "fallback",
+            refresh_token: "refresh-fallback",
             expires_in: 3600,
             token_type: "Bearer",
           },
@@ -187,7 +215,9 @@ describe("auth_poll tool", () => {
     const storedRaw = fs.readFileSync(path.join(tmpDir, "tokens.json"), "utf-8");
     const stored = JSON.parse(storedRaw);
     assert.equal(stored.access_token, "access-new");
-    assert.ok(stored.storage_access_token);
+    assert.equal(stored.storage_access_token, "storage-new");
+    assert.equal(stored.vault_access_token, "vault-new");
+    assert.ok(stored.vault_expires_at);
     assert.ok(stored.refresh_token);
   });
 
