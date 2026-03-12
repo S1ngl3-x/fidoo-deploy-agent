@@ -97,6 +97,38 @@ describe("token-store (file fallback)", () => {
     const loaded = await loadTokens(tmpDir);
     assert.equal(loaded?.access_token, "second");
   });
+
+  it("loadTokens handles tokens.json without vault fields (backward compat)", async () => {
+    const oldTokens = {
+      access_token: "arm-tok",
+      storage_access_token: "storage-tok",
+      refresh_token: "refresh-tok",
+      expires_at: Date.now() + 3600_000,
+      storage_expires_at: Date.now() + 3600_000,
+    };
+    fs.writeFileSync(
+      path.join(tmpDir, "tokens.json"),
+      JSON.stringify(oldTokens),
+      { mode: 0o600 },
+    );
+
+    const loaded = await loadTokens(tmpDir);
+    assert.ok(loaded);
+    assert.equal(loaded!.access_token, "arm-tok");
+    assert.equal(loaded!.vault_access_token, undefined);
+    assert.equal(loaded!.vault_expires_at, undefined);
+  });
+
+  it("saveTokens persists vault fields and loadTokens reads them back", async () => {
+    const tokens = makeTokens({
+      vault_access_token: "vault-tok",
+      vault_expires_at: Date.now() + 3600_000,
+    });
+    await saveTokens(tokens, tmpDir);
+    const loaded = await loadTokens(tmpDir);
+    assert.equal(loaded!.vault_access_token, "vault-tok");
+    assert.ok(loaded!.vault_expires_at);
+  });
 });
 
 describe("isTokenExpired", () => {
@@ -126,6 +158,11 @@ describe("isTokenExpired", () => {
       // Slightly more than 5 minutes to avoid timing flakiness
       expires_at: Date.now() + 5 * 60 * 1000 + 5000,
     });
+    assert.equal(isTokenExpired(tokens), false);
+  });
+
+  it("returns false when vault fields are missing (backward compat)", () => {
+    const tokens = makeTokens(); // no vault fields
     assert.equal(isTokenExpired(tokens), false);
   });
 });
