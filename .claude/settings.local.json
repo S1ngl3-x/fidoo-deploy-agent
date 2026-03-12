@@ -15,7 +15,12 @@
       "Bash(az containerapp:*)",
       "mcp__plugin_deploy-agent_deploy-agent__auth_login",
       "mcp__deploy-agent__container_deploy",
-      "mcp__deploy-agent__auth_status"
+      "mcp__deploy-agent__auth_status",
+      "mcp__deploy-agent__auth_login",
+      "mcp__deploy-agent__auth_poll",
+      "Bash(mkdir -p /tmp/kv-smoke-test && cat > /tmp/kv-smoke-test/index.html << 'EOF'\n<!DOCTYPE html>\n<html>\n<head><title>KV Smoke Test</title></head>\n<body>\n<h1>KV Smoke Test</h1>\n<p>Deployed from feat/keyvault-secrets branch.</p>\n</body>\n</html>\nEOF)",
+      "mcp__deploy-agent__app_deploy",
+      "Bash(git checkout:*)"
     ],
     "additionalDirectories": [
       "/Users/peterhora/Documents/fidoo/deploy_agent/docs"
