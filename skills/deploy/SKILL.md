@@ -127,7 +127,14 @@ Look for `app.py`, `server.py`, `main.py` in that order. Default: `python app.py
 
 ---
 
-### File: `Dockerfile` — Node.js, no SQLite
+### Dockerfile Rules
+
+1. **Never use `-slim` or `-alpine` base images** when Litestream is involved. Slim images strip CA certificates, causing TLS failures (`x509: certificate signed by unknown authority`) when Litestream connects to Azure Blob Storage. Always use the full base image (`node:22`, `python:3.12`).
+2. **Always set `DB_PATH` and `DATA_DIR` env vars** in SQLite Dockerfiles. Litestream reads `${DB_PATH}` — if unset, the container crashes immediately (`database path or replica URL required`).
+3. **Build the frontend inside the container** if the app has a frontend build step (Vite, webpack, etc.). The deploy tool uploads source files — never rely on a local `dist/` being present. Install all deps (including devDependencies), run the build, then prune.
+4. **Architecture: backend serves frontend.** The container runs a single process (e.g., Express) that serves both the API and static frontend assets from a build output directory. There is no separate frontend server.
+
+### File: `Dockerfile` — Node.js, API only (no SQLite, no frontend build)
 
 ```dockerfile
 FROM node:22-slim
@@ -139,16 +146,35 @@ EXPOSE 8080
 CMD ["node", "<start-file>"]
 ```
 
-### File: `Dockerfile` — Node.js, with SQLite (Litestream)
+### File: `Dockerfile` — Node.js, with frontend build (no SQLite)
+
+Use when the project has a frontend build step (Vite, webpack, etc.) but no SQLite.
 
 ```dockerfile
 FROM node:22-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npx vite build
+RUN npm prune --omit=dev
+EXPOSE 8080
+CMD ["node", "<start-file>"]
+```
+
+### File: `Dockerfile` — Node.js, with SQLite (Litestream)
+
+```dockerfile
+FROM node:22
 ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
 RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY . .
+ENV DATA_DIR=/data
+ENV DB_PATH=/data/app.db
+RUN mkdir -p /data
 COPY litestream.yml /etc/litestream.yml
 COPY start.sh ./
 RUN chmod +x start.sh
@@ -156,7 +182,31 @@ EXPOSE 8080
 CMD ["./start.sh"]
 ```
 
-### File: `Dockerfile` — Python, no SQLite
+### File: `Dockerfile` — Node.js, with frontend build + SQLite (Litestream)
+
+Use when the project has both a frontend build step and SQLite persistence.
+
+```dockerfile
+FROM node:22
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npx vite build
+RUN npm prune --omit=dev
+ENV DATA_DIR=/data
+ENV DB_PATH=/data/app.db
+RUN mkdir -p /data
+COPY litestream.yml /etc/litestream.yml
+COPY start.sh ./
+RUN chmod +x start.sh
+EXPOSE 8080
+CMD ["./start.sh"]
+```
+
+### File: `Dockerfile` — Python, API only (no SQLite)
 
 ```dockerfile
 FROM python:3.12-slim
@@ -171,13 +221,16 @@ CMD ["python", "<start-file>"]
 ### File: `Dockerfile` — Python, with SQLite (Litestream)
 
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.12
 ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
 RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+ENV DATA_DIR=/data
+ENV DB_PATH=/data/app.db
+RUN mkdir -p /data
 COPY litestream.yml /etc/litestream.yml
 COPY start.sh ./
 RUN chmod +x start.sh
@@ -232,6 +285,23 @@ DB_PATH = os.environ.get("DB_PATH") or str(pathlib.Path(os.environ.get("DATA_DIR
 ```
 
 If the app hardcodes a DB path (e.g. `./data.db`), update it to use `DATA_DIR` before deploying.
+
+### Detecting frontend build needs
+
+Before scaffolding, check if the project has a frontend build step:
+- Has `vite`, `webpack`, `esbuild`, or `next` in `package.json` devDependencies → needs frontend build
+- Has `vite.config.*`, `webpack.config.*`, or `next.config.*` → needs frontend build
+- Backend serves static files from `dist/`, `build/`, or `public/` → needs frontend build
+
+If a frontend build is detected, use the "with frontend build" Dockerfile variant and confirm the build command with the user (default: `npx vite build`).
+
+### Container Dockerfile troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `database path or replica URL required` | `DB_PATH` env var not set | Add `ENV DB_PATH=/data/app.db` to Dockerfile |
+| `x509: certificate signed by unknown authority` | Slim/alpine image missing CA certs | Use full base image (`node:22`, `python:3.12`) |
+| `ENOENT: no such file or directory, stat '.../dist/index.html'` | Frontend not built in container | Add `RUN npx vite build` in Dockerfile |
 
 ### Re-deploy
 
