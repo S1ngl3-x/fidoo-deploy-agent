@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "deploy-agent": {
-      "command": "node",
-      "args": ["dist/src/server.js"],
+      "command": "npx",
+      "args": ["-y", "tsx", "src/server.ts"],
       "type": "stdio",
       "env": {
         "DEPLOY_AGENT_TENANT_ID": "7bcac0ca-0725-4318-9adc-e9b670a48e92",
