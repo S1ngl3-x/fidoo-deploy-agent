@@ -1,32 +1,6 @@
 {
   "name": "deploy-agent",
-  "version": "0.1.0",
-  "description": "Deploy static HTML/JS apps to Azure Static Web Apps with Entra ID authentication",
-  "skills": "./skills/",
-  "mcpServer": {
-    "command": "node",
-    "args": ["./dist/src/server.js"],
-    "type": "stdio",
-    "env": {
-      "DEPLOY_AGENT_TENANT_ID": "7bcac0ca-0725-4318-9adc-e9b670a48e92",
-      "DEPLOY_AGENT_CLIENT_ID": "d98d6d07-48a7-474f-a409-8d2cd1be8c5c",
-      "DEPLOY_AGENT_SUBSCRIPTION_ID": "910c52ef-044b-4bd1-b5e9-84700289fca7",
-      "DEPLOY_AGENT_RESOURCE_GROUP": "rg-published-apps",
-      "DEPLOY_AGENT_STORAGE_ACCOUNT": "fidoovibestorage",
-      "DEPLOY_AGENT_CONTAINER_NAME": "app-content",
-      "DEPLOY_AGENT_APP_DOMAIN": "ai-apps.env.fidoo.cloud",
-      "DEPLOY_AGENT_SWA_SLUG": "swa-ai-apps",
-      "DEPLOY_AGENT_LOCATION": "germanywestcentral",
-      "DEPLOY_AGENT_CONTAINER_RESOURCE_GROUP": "rg-alipowski-test",
-      "DEPLOY_AGENT_CONTAINER_ENV_NAME": "managedEnvironment-rgalipowskitest-adaa",
-      "DEPLOY_AGENT_ACR_NAME": "fidooapps",
-      "DEPLOY_AGENT_ACR_LOGIN_SERVER": "fidooapps-d4f2bhfjg2fygqg7.azurecr.io",
-      "DEPLOY_AGENT_PULL_IDENTITY_ID": "",
-      "DEPLOY_AGENT_ACR_ADMIN_USERNAME": "fidooapps",
-      "DEPLOY_AGENT_PORTAL_CLIENT_ID": "e6df67bc-a2b0-47b2-b3fa-8231dbfd3e97",
-      "DEPLOY_AGENT_PORTAL_OBJECT_ID": "75d7f2f0-57c8-4673-8d14-08072133caa7",
-      "DEPLOY_AGENT_GRAPH_SP_CLIENT_ID": "f1ddd060-33cd-4dd2-9fd4-54382f5c0464",
-      "DEPLOY_AGENT_KEY_VAULT_NAME": "kv-fidoo-vibe-deploy2"
-    }
-  }
+  "version": "0.2.0",
+  "description": "Deploy static and container apps to Azure with Entra ID authentication",
+  "skills": "./skills/"
 }

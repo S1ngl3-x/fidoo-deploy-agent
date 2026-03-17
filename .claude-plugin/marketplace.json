@@ -8,7 +8,7 @@
       "name": "deploy-agent",
       "source": "./",
       "description": "Deploy static HTML/JS apps to Azure Static Web Apps with Entra ID authentication",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }
