@@ -6,7 +6,7 @@ import { refreshVaultToken } from "./auth/device-code.js";
 
 const SERVER_INFO = {
   name: "deploy-agent",
-  version: "0.1.0",
+  version: "0.4.1",
 };
 
 export async function handleInitialize(
@@ -69,7 +69,9 @@ export async function handleToolsCall(
 const isMainModule =
   process.argv[1] &&
   (process.argv[1].endsWith("/server.js") ||
-    process.argv[1].endsWith("\\server.js"));
+    process.argv[1].endsWith("\\server.js") ||
+    process.argv[1].endsWith("/server.ts") ||
+    process.argv[1].endsWith("\\server.ts"));
 
 if (isMainModule) {
   const handlers = new Map<string, MethodHandler>();
