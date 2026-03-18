@@ -15,6 +15,8 @@ description: >
 You are orchestrating deployments to Azure. Static apps go to Azure Static Web Apps. Fullstack apps (any runtime + optional SQLite) go to Azure Container Apps.
 Apps get custom domains under `*.env.fidoo.cloud` and Entra ID authentication.
 
+**CRITICAL: No local tools required.** The user does NOT need Docker, Azure CLI (`az`), or any other tool installed locally. All deployment operations (ACR image builds, container management, blob storage) are handled remotely through MCP tools. Never instruct the user to install prerequisites.
+
 ## Step 1: Check Authentication
 
 Before any operation, check if the user is authenticated:
@@ -312,7 +314,9 @@ If a frontend build is detected, use the "with frontend build" Dockerfile varian
 | `ENOENT: no such file or directory, stat '.../dist/index.html'` | Frontend not built in container | Use multi-stage build with `RUN npm run build` |
 | `redirect_uri_mismatch` or redirect to `localhost` after deploy | App has its own MSAL/auth (e.g. B2C) with localhost redirect URIs hardcoded for dev. Easy Auth and app-level auth collide — double login. | The app must disable its own MSAL auth when deployed behind Easy Auth. Read the authenticated user from the `X-MS-CLIENT-PRINCIPAL` header instead. If the app must keep its own auth, register the deployed URL as a redirect URI in the app's own AD/B2C app registration. |
 
-**Local Docker debugging:** If an ACR build fails, check if the user has Docker installed locally (`docker --version`). If available, test the Dockerfile locally with `docker build -t test-app .` and `docker run -p 8080:8080 test-app` — this gives instant feedback without waiting for ACR round-trips. Do not require or depend on local Docker — it is only a faster feedback loop for troubleshooting.
+**IMPORTANT: Docker and Azure CLI (`az`) are NEVER required for deployment.** The deploy agent handles everything through MCP tools — ACR image builds, container app creation, and all Azure operations happen remotely. Never tell the user to install Docker, `az`, or any other tool as a prerequisite for deploying.
+
+**Optional local debugging (advanced users only):** If an ACR build fails and the user already has Docker installed, they can optionally test the Dockerfile locally with `docker build -t test-app .` and `docker run -p 8080:8080 test-app` for faster iteration. This is purely optional and never a requirement.
 
 ### Re-deploy
 
