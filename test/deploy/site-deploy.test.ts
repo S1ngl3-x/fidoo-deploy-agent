@@ -1,12 +1,13 @@
 import { describe, test, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { installMockFetch, restoreFetch, mockFetch, getFetchCalls } from "../helpers/mock-fetch.js";
-import { listSecretsMatcher, mockExecFile } from "../helpers/mock-swa-deploy.js";
+import { listSecretsMatcher, mockExecFile, swaBinaryMatcher } from "../helpers/mock-swa-deploy.js";
 import { deploySite } from "../../src/deploy/site-deploy.js";
 
 describe("deploySite", () => {
   beforeEach(() => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
   });
   afterEach(() => {

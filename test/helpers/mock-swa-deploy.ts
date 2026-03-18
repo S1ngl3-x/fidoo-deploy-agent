@@ -4,9 +4,10 @@
  * The new deploy flow calls:
  *   deploySwaDir -> getDeploymentToken (fetch /listSecrets) -> deploySwaContent (binary via execFile)
  *
- * These helpers mock both parts:
+ * These helpers mock all parts:
  *   1. mockFetch matcher for /listSecrets (returns a fake deployment token)
- *   2. mock.method on child_process.execFile (returns success output)
+ *   2. mockFetch matcher for SWA binary download (metadata + binary)
+ *   3. mock.method on child_process.execFile (returns success output)
  */
 
 import { mock } from "node:test";
@@ -23,6 +24,43 @@ export function listSecretsMatcher(): RequestMatcher {
       return {
         status: 200,
         body: { properties: { apiKey: "test-deploy-key" } },
+      };
+    }
+    return undefined;
+  };
+}
+
+/**
+ * Returns a mockFetch matcher that handles the SWA binary download.
+ * Covers both the metadata URL (aka.ms/swalocaldeploy) and the actual
+ * binary download URL. Since execFile is already mocked, the binary
+ * never actually runs — we just need the download to not crash.
+ */
+export function swaBinaryMatcher(): RequestMatcher {
+  return (url: string) => {
+    // Metadata endpoint (returns fake stable version info)
+    if (url.includes("aka.ms/swalocaldeploy") || url.includes("swalocaldeploy")) {
+      return {
+        status: 200,
+        body: [
+          {
+            version: "stable",
+            buildId: "test-build",
+            files: {
+              "linux-x64": { url: "https://fake.test/StaticSitesClient", sha: "abc123" },
+              "osx-x64": { url: "https://fake.test/StaticSitesClient", sha: "abc123" },
+              "win-x64": { url: "https://fake.test/StaticSitesClient.exe", sha: "abc123" },
+            },
+          },
+        ],
+      };
+    }
+    // Actual binary download
+    if (url.includes("fake.test/StaticSitesClient")) {
+      return {
+        status: 200,
+        body: "FAKE_BINARY",
+        headers: { "content-type": "application/octet-stream" },
       };
     }
     return undefined;

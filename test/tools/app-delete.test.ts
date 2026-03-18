@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { installMockFetch, restoreFetch, mockFetch, getFetchCalls } from "../helpers/mock-fetch.js";
-import { mockExecFile } from "../helpers/mock-swa-deploy.js";
+import { mockExecFile, swaBinaryMatcher } from "../helpers/mock-swa-deploy.js";
 import { handler } from "../../src/tools/app-delete.js";
 
 let tokenDir: string;
@@ -94,6 +94,7 @@ function mockDeleteFlow(slug: string) {
 describe("app_delete", () => {
   beforeEach(() => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
   });
 

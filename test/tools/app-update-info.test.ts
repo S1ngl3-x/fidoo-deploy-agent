@@ -9,7 +9,7 @@ import {
   mockFetch,
   getFetchCalls,
 } from "../helpers/mock-fetch.js";
-import { mockExecFile } from "../helpers/mock-swa-deploy.js";
+import { mockExecFile, swaBinaryMatcher } from "../helpers/mock-swa-deploy.js";
 import { handler } from "../../src/tools/app-update-info.js";
 
 let tokenDir: string;
@@ -81,6 +81,7 @@ function mockUpdateFlow(slug: string) {
 describe("app_update_info", () => {
   beforeEach(() => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
   });
 
