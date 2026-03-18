@@ -9,7 +9,7 @@ import {
   mockFetch,
   getFetchCalls,
 } from "../helpers/mock-fetch.js";
-import { mockExecFile } from "../helpers/mock-swa-deploy.js";
+import { mockExecFile, swaBinaryMatcher } from "../helpers/mock-swa-deploy.js";
 import { handler } from "../../src/tools/app-deploy.js";
 
 let tokenDir: string;
@@ -146,6 +146,7 @@ function mockBlobAndDeployFlow(slug: string, registryStatus: number = 404) {
 describe("app_deploy — first deploy", () => {
   beforeEach(async () => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
     await setupTokenDir(mockTokens());
     await setupAppDir();
@@ -300,6 +301,7 @@ describe("app_deploy — first deploy", () => {
 describe("app_deploy — missing index.html warning", () => {
   beforeEach(async () => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
     await setupTokenDir(mockTokens());
   });
@@ -382,6 +384,7 @@ describe("app_deploy — missing index.html warning", () => {
 describe("app_deploy — re-deploy", () => {
   beforeEach(async () => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
     await setupTokenDir(mockTokens());
     await setupAppDir();

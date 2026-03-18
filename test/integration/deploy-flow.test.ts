@@ -21,7 +21,7 @@ import {
   mockFetch,
   getFetchCalls,
 } from "../helpers/mock-fetch.js";
-import { mockExecFile } from "../helpers/mock-swa-deploy.js";
+import { mockExecFile, swaBinaryMatcher } from "../helpers/mock-swa-deploy.js";
 import { toolRegistry } from "../../src/tools/index.js";
 
 let tokenDir: string;
@@ -59,6 +59,7 @@ describe("integration: full deploy lifecycle (blob + registry)", () => {
 
   beforeEach(async () => {
     installMockFetch();
+    mockFetch(swaBinaryMatcher());
     mockExecFile();
 
     // Initially no registry exists
