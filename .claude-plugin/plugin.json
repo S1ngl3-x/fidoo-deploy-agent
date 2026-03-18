@@ -1,9 +1,8 @@
 {
   "name": "deploy-agent",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Deploy static and container apps to Azure with Entra ID authentication",
   "skills": "./skills/",
-  "hooks": "./hooks/",
   "mcpServers": {
     "deploy-agent": {
       "command": "npx",
