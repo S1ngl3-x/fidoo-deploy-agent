@@ -130,7 +130,7 @@ Look for `app.py`, `server.py`, `main.py` in that order. Default: `python app.py
 ### Dockerfile Rules
 
 1. **Never use `-slim` or `-alpine` base images.** Slim images strip CA certificates, causing TLS failures (`x509: certificate signed by unknown authority`) for any outbound HTTPS call (Azure APIs, webhooks, OAuth, Litestream). Always use the full base image (`node:22`, `python:3.12`).
-2. **Always set `DB_PATH` and `DATA_DIR` env vars** in SQLite Dockerfiles. Litestream reads `${DB_PATH}` — if unset, the container crashes immediately (`database path or replica URL required`).
+2. **Canonical DB path: `/data/app.db`.** Always set `ENV DATA_DIR=/data` and `ENV DB_PATH=/data/app.db` in SQLite Dockerfiles. Litestream reads `${DB_PATH}` — if unset, the container crashes (`database path or replica URL required`). The app must read from `process.env.DB_PATH`. No custom DB filenames — this prevents silent data loss from path mismatches between Litestream and the app.
 3. **Backend serves frontend.** The container runs a single process that serves both the API and static frontend assets. There is no separate frontend server. The backend framework serves the built frontend in its idiomatic way (e.g., `express.static()` for Express, `app.mount("/", StaticFiles(...))` for FastAPI, Flask `static_folder`).
 4. **Build the frontend inside the container.** The deploy tool uploads source files — never rely on a local `dist/` or `build/` being present. If the app has a frontend build step, use a multi-stage Docker build: the first stage installs all dependencies and runs the project's build script (`npm run build`, `npx vite build`, etc.), the second stage copies the output and installs only production dependencies.
 
@@ -257,22 +257,42 @@ litestream restore -if-replica-exists -config /etc/litestream.yml "${DB_PATH}"
 exec litestream replicate -exec "python <start-file>" -config /etc/litestream.yml
 ```
 
-### App code contract
+### App code contract — strict DB path
 
-Remind the user their app must derive the DB path from env vars:
+The deploy agent enforces a **canonical DB path**: `DB_PATH=/data/app.db`. This is set in the Dockerfile, container env vars, and litestream.yml. The app **must** read from `process.env.DB_PATH` — no custom DB filenames.
+
+Required app code pattern:
 
 ```js
-// Node.js
-const DB_PATH = process.env.DB_PATH || require("path").join(process.env.DATA_DIR || ".", "app.db");
+// Node.js — MUST use process.env.DB_PATH
+const DB_PATH = process.env.DB_PATH || "/data/app.db";
 ```
 
 ```python
-# Python
-import os, pathlib
-DB_PATH = os.environ.get("DB_PATH") or str(pathlib.Path(os.environ.get("DATA_DIR", ".")) / "app.db")
+# Python — MUST use os.environ DB_PATH
+import os
+DB_PATH = os.environ.get("DB_PATH", "/data/app.db")
 ```
 
-If the app hardcodes a DB path (e.g. `./data.db`), update it to use `DATA_DIR` before deploying.
+### Pre-deploy DB path validation
+
+Before calling `container_deploy` with `persistent_storage: true`, scan the app code for hardcoded DB paths. This is a **blocking validation** — do not deploy until resolved.
+
+**Step 1 — Search for DB path usage:**
+- Grep for `DatabaseSync(`, `new Database(`, `sqlite3.connect(`, `sqlite3.open(`, `better-sqlite3`, `SQLAlchemy`
+- Grep for `.db"`, `.db'`, `.sqlite"`, `.sqlite'` in JS/TS/Python files
+- Check if `process.env.DB_PATH` or `os.environ.get("DB_PATH")` is used
+
+**Step 2 — Evaluate:**
+- If the app reads `process.env.DB_PATH` → proceed
+- If the app hardcodes a DB filename (e.g. `"barometer.db"`, `"./data.db"`, `"myapp.sqlite"`) → **block and fix**
+
+**Step 3 — Fix hardcoded paths:**
+Tell the user: "Your app uses a hardcoded DB path `{detected_path}`. For deployment with Litestream, the app must read the DB path from the `DB_PATH` environment variable. I'll update it now."
+
+Then replace the hardcoded path with `process.env.DB_PATH || "/data/app.db"` (Node.js) or `os.environ.get("DB_PATH", "/data/app.db")` (Python). Show the diff and confirm before deploying.
+
+**Why this matters:** Litestream and the app must agree on the exact same file path. If the app writes to `barometer.db` but Litestream replicates `app.db`, data is silently lost.
 
 ### Detecting frontend build needs
 
@@ -290,6 +310,7 @@ If a frontend build is detected, use the "with frontend build" Dockerfile varian
 | `database path or replica URL required` | `DB_PATH` env var not set | Add `ENV DB_PATH=/data/app.db` to Dockerfile |
 | `x509: certificate signed by unknown authority` | Base image missing CA certs (`-slim` or `-alpine` used) | Use full base image (`node:22`, `python:3.12`) |
 | `ENOENT: no such file or directory, stat '.../dist/index.html'` | Frontend not built in container | Use multi-stage build with `RUN npm run build` |
+| `redirect_uri_mismatch` or redirect to `localhost` after deploy | App has its own MSAL/auth (e.g. B2C) with localhost redirect URIs hardcoded for dev. Easy Auth and app-level auth collide — double login. | The app must disable its own MSAL auth when deployed behind Easy Auth. Read the authenticated user from the `X-MS-CLIENT-PRINCIPAL` header instead. If the app must keep its own auth, register the deployed URL as a redirect URI in the app's own AD/B2C app registration. |
 
 **Local Docker debugging:** If an ACR build fails, check if the user has Docker installed locally (`docker --version`). If available, test the Dockerfile locally with `docker build -t test-app .` and `docker run -p 8080:8080 test-app` — this gives instant feedback without waiting for ACR round-trips. Do not require or depend on local Docker — it is only a faster feedback loop for troubleshooting.
 
