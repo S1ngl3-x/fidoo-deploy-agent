@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Check if this Bash command is a git push to main or master (e.g. 'git push', 'git push origin main', 'git push upstream main'). If it IS a push to main/master, check whether the current commit already includes a version bump (look at recent git log for a version bump commit like '🔖 Bump version'). If there is NO version bump in the pending commits, BLOCK the push and tell the user: 'You are pushing to main without a version bump. Would you like to bump the version first? (patch/minor/major)'. If a version bump IS already present, or if the command is NOT a git push to main, approve the command.",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

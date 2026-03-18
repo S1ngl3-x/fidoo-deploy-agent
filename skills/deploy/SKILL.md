@@ -236,7 +236,7 @@ dbs:
         account-name: ${AZURE_STORAGE_ACCOUNT_NAME}
         account-key: ${AZURE_STORAGE_ACCOUNT_KEY}
         bucket: ${AZURE_STORAGE_CONTAINER}
-        path: db.sqlite
+        path: app.db
 ```
 
 ### File: `start.sh` — Node.js
